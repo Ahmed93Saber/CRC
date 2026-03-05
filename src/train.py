@@ -16,7 +16,6 @@ from src.engine import train_one_epoch, evaluate_model
 
 def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, model_dir, trial=None, epochs=50):
     """Handles the training, validation, and early stopping for a single fold."""
-    # 1. Setup Model & Optimization
     model = BinaryClassificationModel(
         output_dim=params['output_dim'],
         n_heads=params['n_heads'],
@@ -27,42 +26,43 @@ def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, 
     criterion = nn.CrossEntropyLoss()
     early_stopper = EarlyStopping(patience=10, delta=0.001)
 
-    best_epoch_results = {'f1': 0, 'auc': 0, 'preds': [], 'truths': []}
+    best_epoch_metrics = {'f1': 0, 'auc': 0, 'preds': [], 'truths': []}
 
     for epoch in range(epochs):
         _ = train_one_epoch(model, train_loader, criterion, optimizer, device)
 
-        val_loss, val_bal_acc, val_f1, _, _, val_auc, preds, truths, _ = evaluate_model(
-            model, val_loader, criterion, device
-        )
+        # Catch the dictionary instead of unpacking a tuple
+        val_results = evaluate_model(model, val_loader, criterion, device)
 
         if (epoch + 1) % 10 == 0:
-            print(f"  Epoch {epoch + 1}/{epochs} | Val Loss: {val_loss:.4f} | F1: {val_f1:.4f} | AUC: {val_auc:.4f}")
+            print(
+                f"  Epoch {epoch + 1}/{epochs} | Val Loss: {val_results['loss']:.4f} | F1: {val_results['f1']:.4f} | AUC: {val_results['auc']:.4f}")
 
         # Track best F1
-        if val_f1 > (early_stopper.best_score if early_stopper.best_score else -np.inf):
-            best_epoch_results.update({
-                'f1': val_f1, 'auc': val_auc,
-                'preds': preds, 'truths': truths
+        if val_results['f1'] > (early_stopper.best_score if early_stopper.best_score else -np.inf):
+            best_epoch_metrics.update({
+                'f1': val_results['f1'],
+                'auc': val_results['auc'],
+                'preds': val_results['preds'],
+                'truths': val_results['labels']
             })
 
-            # Save directly to the final models directory
             ckpt_name = f"fold_{fold_idx}.pt"
             torch.save(model.state_dict(), os.path.join(model_dir, ckpt_name))
 
         # Optuna Pruning
         if trial is not None:
-            trial.report(val_f1, epoch + (fold_idx * epochs))
+            trial.report(val_results['f1'], epoch + (fold_idx * epochs))
             if trial.should_prune():
                 print(f"  [INFO] Trial pruned by Optuna at fold {fold_idx + 1}, epoch {epoch + 1}")
                 raise optuna.TrialPruned()
 
-        early_stopper(val_f1)
+        early_stopper(val_results['f1'])
         if early_stopper.early_stop:
             print(f"  Early stopping triggered at epoch {epoch + 1}")
             break
 
-    return best_epoch_results
+    return best_epoch_metrics
 
 
 def evaluate_test_set(test_dataset, params, device, model_dir, n_splits):
@@ -84,18 +84,17 @@ def evaluate_test_set(test_dataset, params, device, model_dir, n_splits):
         ).to(device)
         model.load_state_dict(torch.load(model_path))
 
-        _, _, test_f1, test_prec, test_rec, test_auc, t_preds, t_truths, t_ids = evaluate_model(
-            model, test_loader, criterion, device
-        )
+        # Catch the dictionary
+        test_results = evaluate_model(model, test_loader, criterion, device)
 
-        test_data['f1s'].append(test_f1)
-        test_data['aucs'].append(test_auc)
-        test_data['precs'].append(test_prec)
-        test_data['recs'].append(test_rec)
-        test_data['preds'].append(t_preds)
-        test_data['truths'].append(t_truths)
-        test_data['ids'].append(t_ids)
-        test_data['cms'].append(confusion_matrix(t_truths, t_preds))
+        test_data['f1s'].append(test_results['f1'])
+        test_data['aucs'].append(test_results['auc'])
+        test_data['precs'].append(test_results['prec'])
+        test_data['recs'].append(test_results['rec'])
+        test_data['preds'].append(test_results['preds'])
+        test_data['truths'].append(test_results['labels'])
+        test_data['ids'].append(test_results['ids'])
+        test_data['cms'].append(confusion_matrix(test_results['labels'], test_results['preds']))
 
     return test_data
 
@@ -114,25 +113,21 @@ def save_optuna_artifacts(save_dir, test_data):
 
 def run_cross_validation(datasets, params, device, trial=None, n_splits=5, epochs=50):
     """Main Orchestrator: Runs stratified K-Fold cross validation and test set evaluation."""
-    print(f"Starting {n_splits}-Fold Stratified CV...")
+    print(f"Starting {n_splits}-Fold Stratified CV ({n_splits} total runs)...")
 
-    # --- Setup Final Directories directly ---
     save_dir = f"./artifacts_max/trial_{trial.number}" if trial else "./artifacts_max/default"
     model_dir = os.path.join(save_dir, "models")
     os.makedirs(model_dir, exist_ok=True)
 
-    # --- Setup Data Splits ---
     label_col_name = params['label_col']
     labels_list = datasets['train'].df[label_col_name].values
     dummy_X = np.zeros(len(labels_list))
 
     skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
 
-    # --- Tracking Structures (Validation) ---
     fold_overall_f1s = []
     fold_overall_aucs = []
 
-    # --- Main Validation Loop ---
     for current_fold, (train_ids, val_ids) in enumerate(skf.split(dummy_X, labels_list)):
         print(f"\n--- Run {current_fold + 1}/{n_splits} | Fold {current_fold + 1} ---")
 
@@ -141,7 +136,7 @@ def run_cross_validation(datasets, params, device, trial=None, n_splits=5, epoch
             batch_size=params['batch_size'],
             sampler=torch.utils.data.SubsetRandomSampler(train_ids)
         )
-        val_dataset_fold = Subset(datasets['val'], val_ids)  # use PyTorch's Subset for val_loader so it's deterministic
+        val_dataset_fold = Subset(datasets['val'], val_ids)
         val_loader = DataLoader(val_dataset_fold, batch_size=1, shuffle=False)
 
         best_epoch_metrics = train_and_validate_fold(
@@ -158,17 +153,14 @@ def run_cross_validation(datasets, params, device, trial=None, n_splits=5, epoch
         fold_overall_f1s.append(best_epoch_metrics['f1'])
         fold_overall_aucs.append(best_epoch_metrics['auc'])
 
-    # --- Aggregation & Test Phase ---
     avg_f1_overall = np.mean(fold_overall_f1s)
     avg_auc_overall = np.mean(fold_overall_aucs)
 
     if trial is not None:
-        # Log validation metrics
         trial.set_user_attr("avg_F1_val", float(avg_f1_overall))
         trial.set_user_attr("avg_auc_val", float(avg_auc_overall))
 
-        # Condition 1: Check Validation Threshold
-        if avg_auc_overall > 0.5 and avg_f1_overall > 0.5:
+        if avg_auc_overall > 0.69 and avg_f1_overall > 0.75:
             print(
                 f"  [INFO] Validation targets met (AUC: {avg_auc_overall:.4f}, F1: {avg_f1_overall:.4f}). Evaluating Test Set...")
 
@@ -182,8 +174,7 @@ def run_cross_validation(datasets, params, device, trial=None, n_splits=5, epoch
             trial.set_user_attr("avg_precision_test", float(np.mean(test_data['precs'])))
             trial.set_user_attr("avg_recall_test", float(np.mean(test_data['recs'])))
 
-            # Condition 2: Check Test Threshold
-            if avg_test_auc > 0.5 and avg_test_f1 > 0.5:
+            if avg_test_auc > 0.7 and avg_test_f1 > 0.7:
                 print(
                     f"  [SUCCESS] Test targets met (AUC: {avg_test_auc:.4f}, F1: {avg_test_f1:.4f}). Models retained in {model_dir}")
                 save_optuna_artifacts(save_dir, test_data)

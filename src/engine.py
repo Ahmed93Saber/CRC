@@ -13,7 +13,7 @@ def train_one_epoch(model, train_loader, criterion, optimizer, device):
 
     # Unpack 4 items: features, labels, ids, pdl1
     # We ignore ids and pdl1 during training using '_'
-    for features, labels, _ in train_loader:
+    for features, labels, _, _ in train_loader:
         features, labels = {'features': features.to(device)}, labels.to(device)
 
         optimizer.zero_grad()
@@ -29,7 +29,7 @@ def train_one_epoch(model, train_loader, criterion, optimizer, device):
 
 def evaluate_model(model, val_loader, criterion, device):
     """
-    Evaluates the model and returns all metrics plus metadata (ids, pdl1).
+    Evaluates the model and returns a dictionary of all metrics and metadata.
     """
     model.eval()
     running_loss = 0.0
@@ -37,10 +37,9 @@ def evaluate_model(model, val_loader, criterion, device):
     all_preds = []
     all_labels = []
     all_probs = []
-    all_ids = []  # <--- NEW
+    all_ids = []
 
     with torch.no_grad():
-        # Unpack 4 items here as well
         for features, labels, file_ids in val_loader:
             features, labels = {'features': features.to(device)}, labels.to(device)
             outputs = model(features)
@@ -57,14 +56,12 @@ def evaluate_model(model, val_loader, criterion, device):
             all_preds.extend(predicted.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())
             all_probs.extend(probs.cpu().numpy())
-
             all_ids.extend(file_ids)
 
     avg_loss = running_loss / len(val_loader.dataset)
 
     # Calculate basic metrics
     bal_acc, f1 = calculate_metrics(np.array(all_labels), np.array(all_preds))
-
     num_classes = np.array(all_probs).shape[1]
 
     # Calculate Precision and Recall
@@ -78,5 +75,15 @@ def evaluate_model(model, val_loader, criterion, device):
     else:
         auc = roc_auc_score(all_labels, np.array(all_probs), multi_class='ovr')
 
-    # Return everything, including the new metadata lists
-    return avg_loss, bal_acc, f1, prec, rec, auc, all_preds, all_labels, all_ids
+    # Return as a dictionary for scalability
+    return {
+        'loss': avg_loss,
+        'bal_acc': bal_acc,
+        'f1': f1,
+        'prec': prec,
+        'rec': rec,
+        'auc': auc,
+        'preds': all_preds,
+        'labels': all_labels,
+        'ids': all_ids
+    }
