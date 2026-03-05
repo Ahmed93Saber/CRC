@@ -75,7 +75,7 @@ if __name__ == "__main__":
     # Direction is MAXIMIZE because we are returning F1 Score
 
     study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=100)
+    study.optimize(objective, n_trials=2)
 
     optuna_df_path = "optuna_trials.csv"
     study.trials_dataframe().to_csv(optuna_df_path, index=False)

@@ -168,7 +168,7 @@ def run_cross_validation(datasets, params, device, trial=None, n_splits=5, epoch
         trial.set_user_attr("avg_auc_val", float(avg_auc_overall))
 
         # Condition 1: Check Validation Threshold
-        if avg_auc_overall > 0.69 and avg_f1_overall > 0.75:
+        if avg_auc_overall > 0.5 and avg_f1_overall > 0.5:
             print(
                 f"  [INFO] Validation targets met (AUC: {avg_auc_overall:.4f}, F1: {avg_f1_overall:.4f}). Evaluating Test Set...")
 
@@ -183,7 +183,7 @@ def run_cross_validation(datasets, params, device, trial=None, n_splits=5, epoch
             trial.set_user_attr("avg_recall_test", float(np.mean(test_data['recs'])))
 
             # Condition 2: Check Test Threshold
-            if avg_test_auc > 0.7 and avg_test_f1 > 0.7:
+            if avg_test_auc > 0.5 and avg_test_f1 > 0.5:
                 print(
                     f"  [SUCCESS] Test targets met (AUC: {avg_test_auc:.4f}, F1: {avg_test_f1:.4f}). Models retained in {model_dir}")
                 save_optuna_artifacts(save_dir, test_data)

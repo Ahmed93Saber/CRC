@@ -13,7 +13,7 @@ def train_one_epoch(model, train_loader, criterion, optimizer, device):
 
     # Unpack 4 items: features, labels, ids, pdl1
     # We ignore ids and pdl1 during training using '_'
-    for features, labels, _, _ in train_loader:
+    for features, labels, _ in train_loader:
         features, labels = {'features': features.to(device)}, labels.to(device)
 
         optimizer.zero_grad()
