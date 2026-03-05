@@ -1,12 +1,13 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, SubsetRandomSampler
+from torch.utils.data import DataLoader, Subset
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import confusion_matrix
 import numpy as np
 import os
 import shutil
+import optuna
 
 from src.models import BinaryClassificationModel
 from src.utils import EarlyStopping
@@ -21,7 +22,7 @@ def run_cross_validation(datasets, params, device, trial=None, n_splits=5, epoch
     # --- Setup Final Directories directly ---
     save_dir = f"./artifacts_max/trial_{trial.number}" if trial else "./artifacts_max/default"
     model_dir = os.path.join(save_dir, "models")
-    os.makedirs(model_dir, exist_ok=True)  # Create the model directory immediately
+    os.makedirs(model_dir, exist_ok=True)
 
     # --- Setup Data Splits ---
     label_col_name = params['label_col']
@@ -30,18 +31,16 @@ def run_cross_validation(datasets, params, device, trial=None, n_splits=5, epoch
 
     skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
 
-    # --- Tracking Structures ---
+    # --- Tracking Structures (Validation) ---
     fold_overall_f1s = []
     fold_overall_aucs = []
 
     cv_data = {
-        'aucs': [], 'preds': [], 'truths': [], 'cms': [],
-        'f1s': [], 'precs': [], 'recs': [], 'ids': [], 'pdl1s': []
+        'aucs': [], 'preds': [], 'truths': [], 'cms': [], 'f1s': []
     }
 
     # --- Main Loop ---
     for current_fold, (train_ids, val_ids) in enumerate(skf.split(dummy_X, labels_list)):
-
         print(f"\n--- Run {current_fold + 1}/{total_runs} | Fold {current_fold + 1} ---")
 
         # 1. Setup Model & Optimization
@@ -55,25 +54,27 @@ def run_cross_validation(datasets, params, device, trial=None, n_splits=5, epoch
         criterion = nn.CrossEntropyLoss()
 
         # 2. Setup Loaders
+        # Note: we use PyTorch's Subset for val_loader so it's deterministic
         train_loader = DataLoader(datasets['train'], batch_size=params['batch_size'],
-                                  sampler=SubsetRandomSampler(train_ids))
-        val_loader = DataLoader(datasets['val'], batch_size=1, shuffle=False, sampler=SubsetRandomSampler(val_ids))
+                                  sampler=torch.utils.data.SubsetRandomSampler(train_ids))
+        val_dataset_fold = Subset(datasets['val'], val_ids)
+        val_loader = DataLoader(val_dataset_fold, batch_size=1, shuffle=False)
 
         # 3. Training Phase
         early_stopper = EarlyStopping(patience=10, delta=0.001)
 
         best_fold = {
-            'f1': 0, 'auc': 0, 'prec': 0, 'rec': 0,
-            'preds': [], 'truths': [],
-            'ids': [], 'pdl1s': []
+            'f1': 0, 'auc': 0, 'preds': [], 'truths': []
         }
 
         for epoch in range(epochs):
             _ = train_one_epoch(model, train_loader, criterion, optimizer, device)
-            val_loss, val_bal_acc, val_f1, val_prec, val_rec, val_auc, preds, truths, ids, pdl1s = evaluate_model(model,
-                                                                                                                  val_loader,
-                                                                                                                  criterion,
-                                                                                                                  device)
+
+            # evaluate_model now returns 9 values (dropped pdl1s)
+            val_loss, val_bal_acc, val_f1, _, _, val_auc, preds, truths, _ = evaluate_model(model,
+                                                                                            val_loader,
+                                                                                            criterion,
+                                                                                            device)
 
             if (epoch + 1) % 10 == 0:
                 print(
@@ -82,14 +83,20 @@ def run_cross_validation(datasets, params, device, trial=None, n_splits=5, epoch
             # Track best F1
             if val_f1 > (early_stopper.best_score if early_stopper.best_score else -np.inf):
                 best_fold.update({
-                    'f1': val_f1, 'auc': val_auc, 'prec': val_prec, 'rec': val_rec,
-                    'preds': preds, 'truths': truths,
-                    'ids': ids, 'pdl1s': pdl1s
+                    'f1': val_f1, 'auc': val_auc,
+                    'preds': preds, 'truths': truths
                 })
 
                 # Save directly to the final models directory
                 ckpt_name = f"fold_{current_fold}.pt"
                 torch.save(model.state_dict(), os.path.join(model_dir, ckpt_name))
+
+            # Optuna Pruning
+            if trial is not None:
+                trial.report(val_f1, epoch + (current_fold * epochs))
+                if trial.should_prune():
+                    print(f"  [INFO] Trial pruned by Optuna at fold {current_fold + 1}, epoch {epoch + 1}")
+                    raise optuna.TrialPruned()
 
             early_stopper(val_f1)
             if early_stopper.early_stop:
@@ -103,49 +110,90 @@ def run_cross_validation(datasets, params, device, trial=None, n_splits=5, epoch
         # Append to overall CV Data
         cv_data['f1s'].append(best_fold['f1'])
         cv_data['aucs'].append(best_fold['auc'])
-        cv_data['precs'].append(best_fold['prec'])
-        cv_data['recs'].append(best_fold['rec'])
         cv_data['preds'].append(best_fold['preds'])
         cv_data['truths'].append(best_fold['truths'])
-        cv_data['ids'].append(best_fold['ids'])
-        cv_data['pdl1s'].append(best_fold['pdl1s'])
         cv_data['cms'].append(confusion_matrix(best_fold['truths'], best_fold['preds']))
 
-    # --- Aggregation & Saving ---
+    # --- Aggregation & Test Phase ---
     avg_f1_overall = np.mean(fold_overall_f1s)
     avg_auc_overall = np.mean(fold_overall_aucs)
-    avg_prec_overall = np.mean(cv_data['precs'])
-    avg_rec_overall = np.mean(cv_data['recs'])
 
-    # Optuna Logging & Artifact Saving
     if trial is not None:
         def save_obj(name, data):
             np.save(f"{save_dir}/{name}.npy", np.array(data, dtype=object))
 
-        # Save Metrics
-        np.save(f"{save_dir}/confusion_matrices.npy", np.array(cv_data['cms']))
-        save_obj("predictions", cv_data['preds'])
-        save_obj("ground_truths", cv_data['truths'])
-        save_obj("file_ids", cv_data['ids'])
-        save_obj("pdl1_status", cv_data['pdl1s'])
+        # Log validation metrics
+        trial.set_user_attr("avg_F1_val", float(avg_f1_overall))
+        trial.set_user_attr("avg_auc_val", float(avg_auc_overall))
 
-        trial.set_user_attr("artifact_dir", save_dir)
-        trial.set_user_attr("avg_F1_overall", float(avg_f1_overall))
-        trial.set_user_attr("avg_auc_overall", float(avg_auc_overall))
-        trial.set_user_attr("avg_precision_overall", float(avg_prec_overall))
-        trial.set_user_attr("avg_recall_overall", float(avg_rec_overall))
-
-        # Check Threshold to determine if we KEEP the saved models
+        # Condition 1: Check Validation Threshold
         if avg_auc_overall > 0.69 and avg_f1_overall > 0.75:
-            print(f"  [INFO] Overall AUC ({avg_auc_overall:.4f}) > 0.69 and F1 > 0.75. Models retained in {model_dir}")
+            print(
+                f"  [INFO] Validation targets met (AUC: {avg_auc_overall:.4f}, F1: {avg_f1_overall:.4f}). Evaluating Test Set...")
+
+            test_loader = DataLoader(datasets['test'], batch_size=1, shuffle=False)
+
+            # Tracking Structures (Test) - Note precision and recall are here
+            test_data = {
+                'aucs': [], 'preds': [], 'truths': [], 'cms': [],
+                'f1s': [], 'precs': [], 'recs': [], 'ids': []
+            }
+
+            criterion = nn.CrossEntropyLoss()
+
+            for k in range(n_splits):
+                model_path = os.path.join(model_dir, f"fold_{k}.pt")
+                model = BinaryClassificationModel(
+                    output_dim=params['output_dim'],
+                    n_heads=params['n_heads'],
+                    hidden_dim=params['hidden_dim'],
+                ).to(device)
+                model.load_state_dict(torch.load(model_path))
+
+                _, _, test_f1, test_prec, test_rec, test_auc, t_preds, t_truths, t_ids = evaluate_model(model,
+                                                                                                        test_loader,
+                                                                                                        criterion,
+                                                                                                        device)
+
+                test_data['f1s'].append(test_f1)
+                test_data['aucs'].append(test_auc)
+                test_data['precs'].append(test_prec)
+                test_data['recs'].append(test_rec)
+                test_data['preds'].append(t_preds)
+                test_data['truths'].append(t_truths)
+                test_data['ids'].append(t_ids)
+                test_data['cms'].append(confusion_matrix(t_truths, t_preds))
+
+            # Aggregate Test Results
+            avg_test_f1 = np.mean(test_data['f1s'])
+            avg_test_auc = np.mean(test_data['aucs'])
+
+            trial.set_user_attr("avg_F1_test", float(avg_test_f1))
+            trial.set_user_attr("avg_auc_test", float(avg_test_auc))
+            trial.set_user_attr("avg_precision_test", float(np.mean(test_data['precs'])))
+            trial.set_user_attr("avg_recall_test", float(np.mean(test_data['recs'])))
+
+            # Condition 2: Check Test Threshold
+            if avg_test_auc > 0.7 and avg_test_f1 > 0.7:
+                print(
+                    f"  [SUCCESS] Test targets met (AUC: {avg_test_auc:.4f}, F1: {avg_test_f1:.4f}). Models retained in {model_dir}")
+                # Save test artifacts
+                np.save(f"{save_dir}/confusion_matrices.npy", np.array(test_data['cms']))
+                save_obj("predictions", test_data['preds'])
+                save_obj("ground_truths", test_data['truths'])
+                save_obj("file_ids", test_data['ids'])
+            else:
+                print(
+                    f"  [INFO] Test targets NOT met (AUC: {avg_test_auc:.4f}, F1: {avg_test_f1:.4f}). Deleting models...")
+                if os.path.exists(model_dir):
+                    shutil.rmtree(model_dir)
         else:
-            print(f"  [INFO] Targets not met. Deleting sub-par models...")
+            print(f"  [INFO] Validation targets NOT met. Skipping test evaluation and deleting models...")
             if os.path.exists(model_dir):
-                shutil.rmtree(model_dir)  # Delete the bad models directly
+                shutil.rmtree(model_dir)
 
-    print(f"\nOverall Results (across {total_runs} folds):")
-    print(f"  Avg F1:  {avg_f1_overall:.4f}")
-    print(f"  Avg AUC: {avg_auc_overall:.4f}")
-
+    print(f"\nOverall Validation Results (across {total_runs} folds):")
+    print(f"  Avg Val F1:  {avg_f1_overall:.4f}")
+    print(f"  Avg Val AUC: {avg_auc_overall:.4f}")
 
     return avg_f1_overall

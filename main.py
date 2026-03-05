@@ -48,7 +48,15 @@ def objective(trial):
         id_col=ID_COL
     )
 
-    datasets = {'train': train_dataset, 'val': val_dataset}
+    test_dataset = H5Dataset(
+        csv_path=CSV_PATH,
+        feats_path=H5_DIR,
+        label_col=LABEL_COL,
+        split='test',
+        id_col=ID_COL
+    )
+
+    datasets = {'train': train_dataset, 'val': val_dataset, 'test': test_dataset}
 
     # Run CV and get Average F1
     avg_f1 = run_cross_validation(

@@ -79,4 +79,4 @@ def evaluate_model(model, val_loader, criterion, device):
         auc = roc_auc_score(all_labels, np.array(all_probs), multi_class='ovr')
 
     # Return everything, including the new metadata lists
-    return avg_loss, bal_acc, f1, prec, rec, auc, all_preds, all_labels, all_ids, all_pdl1s
+    return avg_loss, bal_acc, f1, prec, rec, auc, all_preds, all_labels, all_ids
