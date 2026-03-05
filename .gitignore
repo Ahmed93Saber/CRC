@@ -1,0 +1,12 @@
+/features_conch_v15/
+/artifacts_max/
+/dataframes/
+/optuna_trials.csv
+/optuna_trials_auc.csv
+/optuna_trials_f1.csv
+/trident/
+/heatmaps/
+/temp_models/
+/features_conch_v15_no_holes/
+/artifacts_max_mit_holes/
+/optuna_trials_mix.csv
