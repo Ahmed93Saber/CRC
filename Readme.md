@@ -1,6 +1,6 @@
 # CRC ABMIL: Whole Slide Image CRC grade Classification 
 
-This repository contains a deep learning pipeline for analyzing Whole Slide Images (WSIs), specifically aimed at Colorectal Cancer (CRC) binary classification tasks (e.g., predicting PD-L1 status). It leverages **Attention-Based Multiple Instance Learning (ABMIL)** on pre-extracted patch features to aggregate bag-level predictions and provide interpretability through attention heatmaps.
+This repository contains a deep learning pipeline for analyzing Whole Slide Images (WSIs), specifically aimed at Colorectal Cancer (CRC) grade classification tasks. It leverages **Attention-Based Multiple Instance Learning (ABMIL)** on pre-extracted patch features to aggregate bag-level predictions and provide interpretability through attention heatmaps.
 
 ## 🚀 Key Features
 
