@@ -38,7 +38,7 @@ def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, 
             print(
                 f"  Epoch {epoch + 1}/{epochs} | Val Loss: {val_results['loss']:.4f} | F1: {val_results['f1']:.4f} | AUC: {val_results['auc']:.4f}")
 
-        # Track best F1
+        # Track best metric
         if val_results['f1'] > (early_stopper.best_score if early_stopper.best_score else -np.inf):
             best_epoch_metrics.update({
                 'f1': val_results['f1'],

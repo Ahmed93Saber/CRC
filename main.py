@@ -5,14 +5,16 @@ from src.train import run_cross_validation
 from src.utils import get_device, seed_everything
 
 # --- Configuration ---
-CSV_PATH = './dataframes/metadata.csv'
-H5_DIR = './features_conch_v15_no_holes'
-LABEL_COL = 'label-1-si'
-ID_COL = 'SLIDE_ID'
+CSV_PATH_TRAIN = './dataframes/structured_labels_biopsy_final_NEW.csv'
+CSV_PATH_TEST = './dataframes/annotations_all_HunCRC_NEW.csv'
+H5_DIR_TRAIN = './features_conch_v15_CAL'
+H5_DIR_TEST = './features_conch_v15_HUN'
+LABEL_COL = 'label'
+ID_COL = 'slide'
 INPUT_DIM = 768
-OUTPUT_DIM = 2  # e.g., Multi-class (2 classes)
+OUTPUT_DIM = 4  # e.g., Multi-class
 N_FOLDS = 5
-MAX_EPOCHS = 100  # Increased since we have early stopping
+MAX_EPOCHS = 200
 
 
 def objective(trial):
@@ -33,24 +35,24 @@ def objective(trial):
     }
 
     train_dataset = H5Dataset(
-        csv_path=CSV_PATH,
-        feats_path=H5_DIR,
+        csv_path=CSV_PATH_TRAIN,
+        feats_path=H5_DIR_TRAIN,
         label_col=LABEL_COL,
         split='train',
         id_col=ID_COL
     )
 
     val_dataset = H5Dataset(
-        csv_path=CSV_PATH,
-        feats_path=H5_DIR,
+        csv_path=CSV_PATH_TRAIN,
+        feats_path=H5_DIR_TRAIN,
         label_col=LABEL_COL,
         split='val',
         id_col=ID_COL
     )
 
     test_dataset = H5Dataset(
-        csv_path=CSV_PATH,
-        feats_path=H5_DIR,
+        csv_path=CSV_PATH_TEST,
+        feats_path=H5_DIR_TEST,
         label_col=LABEL_COL,
         split='test',
         id_col=ID_COL

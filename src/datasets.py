@@ -21,7 +21,8 @@ class H5Dataset(Dataset):
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
         file_id = str(row[self.id_col]).replace(" ", "")
-        pdl1_status = str(row["PD-L1 (TPS Score)"]).replace(" ", "")
+        if self.split != 'test':
+            file_id = file_id.zfill(18)
 
         with h5py.File(os.path.join(self.feats_path, file_id + '.h5'), "r") as f:
             features = torch.from_numpy(f["features"][:])
@@ -35,5 +36,7 @@ class H5Dataset(Dataset):
                 indices = torch.randint(num_available, (self.num_features,), generator=torch.Generator()) # Oversampling
             features = features[indices]
 
-        label = torch.tensor(row[self.label_col], dtype=torch.long)
+        label_map = {'low-grade dysplasia':0, 'high-grade dysplasia':1, 'adenocarcinoma':2, 'other':3}
+
+        label = torch.tensor(label_map.get(row[self.label_col], "Unidentified Label"), dtype=torch.long)
         return features, label, file_id
