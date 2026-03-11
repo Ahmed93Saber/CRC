@@ -8,7 +8,7 @@ This repository contains a deep learning pipeline for analyzing Whole Slide Imag
 * **Hyperparameter Optimization:** Fully integrated with `optuna` for automated tuning of learning rate, weight decay, batch size, attention heads, and hidden dimensions.
 * **Robust Evaluation:** Uses Stratified K-Fold Cross-Validation (`src/train.py`) alongside an array of metrics including AUC, F1-Score (Weighted/Binary), Precision, Recall, and Balanced Accuracy.
 * **Interpretability:** Includes a pipeline to generate and visualize attention heatmaps overlaid on the original WSIs using the `trident` library.
-* **Efficient Data Loading:** Utilizes `h5py` to load pre-computed patch features (e.g., Conch v15 features) directly from `.h5` files, drastically speeding up the training process.
+* **Efficient Data Loading:** Utilizes `h5py` to load pre-computed patch features (e.g., Conch v1.5 features) directly from `.h5` files, drastically speeding up the training process.
 
 ## 📁 Repository Structure
 
