@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from sklearn.metrics import roc_auc_score, precision_score, recall_score, balanced_accuracy_score, f1_score
+from sklearn.metrics import roc_auc_score, precision_score, recall_score, accuracy_score, f1_score
 from src.utils import calculate_metrics
 
 
@@ -61,12 +61,12 @@ def evaluate_model(model, val_loader, criterion, device):
     avg_loss = running_loss / len(val_loader.dataset)
 
     # Calculate basic metrics
-    bal_acc, f1 = calculate_metrics(np.array(all_labels), np.array(all_preds))
+    # bal_acc, f1 = calculate_metrics(np.array(all_labels), np.array(all_preds))
     num_classes = np.array(all_probs).shape[1]
     avg_method = 'binary' if num_classes == 2 else 'weighted'
 
     # Calculate dynamically based on class count
-    bal_acc = balanced_accuracy_score(all_labels, all_preds)
+    acc = accuracy_score(all_labels, all_preds)
     f1 = f1_score(all_labels, all_preds, average=avg_method, zero_division=0)
     prec = precision_score(all_labels, all_preds, average=avg_method, zero_division=0)
     rec = recall_score(all_labels, all_preds, average=avg_method, zero_division=0)
@@ -85,7 +85,7 @@ def evaluate_model(model, val_loader, criterion, device):
     # Return as a dictionary for scalability
     return {
         'loss': avg_loss,
-        'bal_acc': bal_acc,
+        'acc': acc,
         'f1': f1,
         'prec': prec,
         'rec': rec,

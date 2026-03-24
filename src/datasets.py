@@ -7,7 +7,7 @@ import pandas as pd
 
 class H5Dataset(Dataset):
     def __init__(self, feats_path: str, csv_path: str, id_col: str,
-                 label_col: str,  split: str = 'train', num_features=512):
+                 label_col: str,  split: str = 'train', num_features=512, is_aug=False):
         self.df = pd.read_csv(csv_path)
         self.feats_path = feats_path
         self.num_features = num_features
@@ -21,8 +21,11 @@ class H5Dataset(Dataset):
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
         file_id = str(row[self.id_col]).replace(" ", "")
-        if self.split != 'test':
+
+        if self.split == 'train' or self.split == 'val':
             file_id = file_id.zfill(18)
+        elif self.split == 'test':
+            file_id = file_id.zfill(3)
 
         with h5py.File(os.path.join(self.feats_path, file_id + '.h5'), "r") as f:
             features = torch.from_numpy(f["features"][:])

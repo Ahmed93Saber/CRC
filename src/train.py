@@ -10,7 +10,7 @@ import shutil
 import optuna
 
 from src.models import BinaryClassificationModel
-from src.utils import EarlyStopping
+from src.utils import EarlyStopping, CombinedCostLoss
 from src.engine import train_one_epoch, evaluate_model
 
 
@@ -23,10 +23,19 @@ def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, 
     ).to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=params['lr'], weight_decay=params['weight_decay'])
-    criterion = nn.CrossEntropyLoss()
+    # 0: Others, 1: Low-Grade, 2: High-Grade, 3: Adenocarcinoma
+    cost_matrix = torch.tensor([
+        [0.0, 0.0, 0.0, 2.0],
+        [0.0, 0.0, 3.0, 10.0],
+        [0.0, 3.0, 0.0, 5.0],
+        [2.0, 10.0, 5.0, 0.0]
+    ], dtype=torch.float32, device=device)
+
+    # CE weight (alpha) = 1.0, Cost Matrix weight (beta) = 0.1
+    criterion = CombinedCostLoss(cost_matrix, alpha=1.0, beta=params['loss_beta'])
     early_stopper = EarlyStopping(patience=10, delta=0.001)
 
-    best_epoch_metrics = {'f1': 0, 'auc': 0, 'preds': [], 'truths': []}
+    best_epoch_metrics = {'f1': 0, 'auc': 0, 'acc': 0, 'preds': [], 'truths': []}
 
     for epoch in range(epochs):
         _ = train_one_epoch(model, train_loader, criterion, optimizer, device)
@@ -39,12 +48,13 @@ def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, 
                 f"  Epoch {epoch + 1}/{epochs} | Val Loss: {val_results['loss']:.4f} | F1: {val_results['f1']:.4f} | AUC: {val_results['auc']:.4f}")
 
         # Track best metric
-        if val_results['f1'] > (early_stopper.best_score if early_stopper.best_score else -np.inf):
+        if val_results['acc'] > (early_stopper.best_score if early_stopper.best_score else -np.inf):
             best_epoch_metrics.update({
                 'f1': val_results['f1'],
                 'auc': val_results['auc'],
                 'preds': val_results['preds'],
-                'truths': val_results['labels']
+                'truths': val_results['labels'],
+                'acc': val_results['acc'],
             })
 
             ckpt_name = f"fold_{fold_idx}.pt"
@@ -57,7 +67,7 @@ def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, 
                 print(f"  [INFO] Trial pruned by Optuna at fold {fold_idx + 1}, epoch {epoch + 1}")
                 raise optuna.TrialPruned()
 
-        early_stopper(val_results['f1'])
+        early_stopper(val_results['acc'])
         if early_stopper.early_stop:
             print(f"  Early stopping triggered at epoch {epoch + 1}")
             break
@@ -72,7 +82,7 @@ def evaluate_test_set(test_dataset, params, device, model_dir, n_splits):
 
     test_data = {
         'aucs': [], 'preds': [], 'truths': [], 'cms': [],
-        'f1s': [], 'precs': [], 'recs': [], 'ids': []
+        'f1s': [], 'precs': [], 'recs': [], 'ids': [], 'accs': [],
     }
 
     for k in range(n_splits):
@@ -89,6 +99,7 @@ def evaluate_test_set(test_dataset, params, device, model_dir, n_splits):
 
         test_data['f1s'].append(test_results['f1'])
         test_data['aucs'].append(test_results['auc'])
+        test_data['accs'].append(test_results['acc'])
         test_data['precs'].append(test_results['prec'])
         test_data['recs'].append(test_results['rec'])
         test_data['preds'].append(test_results['preds'])
@@ -127,6 +138,7 @@ def run_cross_validation(datasets, params, device, trial=None, n_splits=5, epoch
 
     fold_overall_f1s = []
     fold_overall_aucs = []
+    fold_overall_accs = []
 
     for current_fold, (train_ids, val_ids) in enumerate(skf.split(dummy_X, labels_list)):
         print(f"\n--- Run {current_fold + 1}/{n_splits} | Fold {current_fold + 1} ---")
@@ -152,13 +164,16 @@ def run_cross_validation(datasets, params, device, trial=None, n_splits=5, epoch
 
         fold_overall_f1s.append(best_epoch_metrics['f1'])
         fold_overall_aucs.append(best_epoch_metrics['auc'])
+        fold_overall_accs.append(best_epoch_metrics['acc'])
 
     avg_f1_overall = np.mean(fold_overall_f1s)
     avg_auc_overall = np.mean(fold_overall_aucs)
+    avg_acc_overall = np.mean(fold_overall_accs)
 
     if trial is not None:
         trial.set_user_attr("avg_F1_val", float(avg_f1_overall))
         trial.set_user_attr("avg_auc_val", float(avg_auc_overall))
+        trial.set_user_attr("avg_acc_val", float(avg_acc_overall))
 
         if avg_auc_overall > 0.69 and avg_f1_overall > 0.75:
             print(
@@ -168,9 +183,11 @@ def run_cross_validation(datasets, params, device, trial=None, n_splits=5, epoch
 
             avg_test_f1 = np.mean(test_data['f1s'])
             avg_test_auc = np.mean(test_data['aucs'])
+            avg_test_acc = np.mean(test_data['accs'])
 
             trial.set_user_attr("avg_F1_test", float(avg_test_f1))
             trial.set_user_attr("avg_auc_test", float(avg_test_auc))
+            trial.set_user_attr("avg_acc_test", float(avg_test_acc))
             trial.set_user_attr("avg_precision_test", float(np.mean(test_data['precs'])))
             trial.set_user_attr("avg_recall_test", float(np.mean(test_data['recs'])))
 
@@ -191,5 +208,7 @@ def run_cross_validation(datasets, params, device, trial=None, n_splits=5, epoch
     print(f"\nOverall Validation Results (across {n_splits} folds):")
     print(f"  Avg Val F1:  {avg_f1_overall:.4f}")
     print(f"  Avg Val AUC: {avg_auc_overall:.4f}")
+    print(f"  Avg Val ACC: {avg_acc_overall:.4f}")
 
-    return avg_f1_overall
+
+    return avg_acc_overall

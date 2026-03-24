@@ -31,7 +31,8 @@ def objective(trial):
         'n_heads': trial.suggest_categorical('n_heads', [1, 2, 3, 4, 6, 8]),
         'lr': trial.suggest_float('lr', 1e-5, 1e-2, log=True),
         'weight_decay': trial.suggest_float('weight_decay', 1e-6, 1e-3, log=True),
-        'batch_size': trial.suggest_categorical('batch_size', [4, 8, 16])
+        'batch_size': trial.suggest_categorical('batch_size', [4, 8, 16]),
+        'loss_beta': trial.suggest_float('loss_beta', 0.01, 1.0, log=True)
     }
 
     train_dataset = H5Dataset(
@@ -77,10 +78,13 @@ if __name__ == "__main__":
     # Direction is MAXIMIZE because we are returning F1 Score
 
     study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=2)
+    study.optimize(objective, n_trials=60)
 
     optuna_df_path = "optuna_trials.csv"
-    study.trials_dataframe().to_csv(optuna_df_path, index=False)
+    optuna_df = study.trials_dataframe()
+    # remove the characters: user_attrs from the column names containing the user_attrs
+    optuna_df.columns = [col.replace('user_attrs', '') for col in optuna_df.columns]
+    optuna_df.to_csv(optuna_df_path, index=False)
 
     print("\n--- Optimization Finished ---")
     print("Best Trial:")

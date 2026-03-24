@@ -1,4 +1,6 @@
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 import random
 import os
@@ -64,3 +66,34 @@ class EarlyStopping:
         else:
             self.best_score = val_score
             self.counter = 0
+
+
+class CombinedCostLoss(nn.Module):
+    def __init__(self, cost_matrix, alpha=1.0, beta=0.5):
+        """
+        Args:
+            cost_matrix: The penalty matrix for misclassifications.
+            alpha: Weight for the standard Cross-Entropy loss.
+            beta: Weight for the Cost-Sensitive loss.
+        """
+        super(CombinedCostLoss, self).__init__()
+        self.cost_matrix = cost_matrix
+        self.alpha = alpha
+        self.beta = beta
+
+        # Standard CE loss
+        self.ce_loss = nn.CrossEntropyLoss()
+
+    def forward(self, logits, targets):
+        # 1. Standard Cross-Entropy Loss
+        ce = self.ce_loss(logits, targets)
+
+        # 2. Cost-Sensitive Loss
+        probs = F.softmax(logits, dim=1)
+        batch_costs = self.cost_matrix[targets]
+        expected_costs = torch.sum(probs * batch_costs, dim=1)
+        cs = expected_costs.mean()
+
+        # 3. Combine them
+        total_loss = (self.alpha * ce) + (self.beta * cs)
+        return total_loss
