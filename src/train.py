@@ -23,7 +23,7 @@ def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, 
         hidden_dim=params['hidden_dim'],
     ).to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=params['lr'], weight_decay=params['weight_decay'])
+    optimizer = optim.AdamW(model.parameters(), lr=params['lr'], weight_decay=params['weight_decay'])
     # 0: Others, 1: Low-Grade, 2: High-Grade, 3: Adenocarcinoma
     # 1. Dynamically load the matrix onto the correct device
     cost_matrix = get_cost_matrix(params['matrix_name'], device)
