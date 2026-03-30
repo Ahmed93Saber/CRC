@@ -12,6 +12,7 @@ import optuna
 from src.models import BinaryClassificationModel
 from src.utils import EarlyStopping, CombinedCostLoss
 from src.engine import train_one_epoch, evaluate_model
+from src.cost_matrices import get_cost_matrix          # Import the new getter
 
 
 def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, model_dir, trial=None, epochs=50):
@@ -24,12 +25,8 @@ def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, 
 
     optimizer = optim.Adam(model.parameters(), lr=params['lr'], weight_decay=params['weight_decay'])
     # 0: Others, 1: Low-Grade, 2: High-Grade, 3: Adenocarcinoma
-    cost_matrix = torch.tensor([
-        [0.0, 0.0, 0.0, 2.0],
-        [0.0, 0.0, 3.0, 10.0],
-        [0.0, 3.0, 0.0, 5.0],
-        [2.0, 10.0, 5.0, 0.0]
-    ], dtype=torch.float32, device=device)
+    # 1. Dynamically load the matrix onto the correct device
+    cost_matrix = get_cost_matrix(params['matrix_name'], device)
 
     # CE weight (alpha) = 1.0, Cost Matrix weight (beta) = 0.1
     criterion = CombinedCostLoss(cost_matrix, alpha=1.0, beta=params['loss_beta'])
@@ -184,6 +181,7 @@ def run_cross_validation(datasets, params, device, trial=None, n_splits=5, epoch
             avg_test_f1 = np.mean(test_data['f1s'])
             avg_test_auc = np.mean(test_data['aucs'])
             avg_test_acc = np.mean(test_data['accs'])
+            print(f"Avg acc: {avg_test_acc:.4f}, Avg auc: {avg_test_auc:.4f}, Avg f1: {avg_test_f1:.4f}")
 
             trial.set_user_attr("avg_F1_test", float(avg_test_f1))
             trial.set_user_attr("avg_auc_test", float(avg_test_auc))

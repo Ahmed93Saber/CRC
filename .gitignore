@@ -16,3 +16,5 @@
 /artifacts_max_cl_no_aug/
 /optuna_trials_ce_no_aug.csv
 /optuna_trials_cl_no_aug.csv
+/playground.py
+/playground.ipynb

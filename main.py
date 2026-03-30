@@ -15,6 +15,7 @@ INPUT_DIM = 768
 OUTPUT_DIM = 4  # e.g., Multi-class
 N_FOLDS = 5
 MAX_EPOCHS = 200
+IS_AUG = False
 
 
 def objective(trial):
@@ -28,11 +29,15 @@ def objective(trial):
         'label_col': LABEL_COL,
         'n_layers': trial.suggest_int('n_layers', 3, 5),
         'hidden_dim': trial.suggest_categorical('hidden_dim', [256, 512, 1024]),
-        'n_heads': trial.suggest_categorical('n_heads', [1, 2, 3, 4, 6, 8]),
+        'n_heads': trial.suggest_categorical('n_heads', [3, 4, 6, 8]),
         'lr': trial.suggest_float('lr', 1e-5, 1e-2, log=True),
         'weight_decay': trial.suggest_float('weight_decay', 1e-6, 1e-3, log=True),
         'batch_size': trial.suggest_categorical('batch_size', [4, 8, 16]),
-        'loss_beta': trial.suggest_float('loss_beta', 0.01, 1.0, log=True)
+        'loss_beta': trial.suggest_float('loss_beta', 0.01, 1.0, log=True),
+        'matrix_name': trial.suggest_categorical('matrix_name', ["baseline", "asymmetric_risk",
+                                                                "squared_distance", "malignant_bottleneck"]),
+        # 'aug_p': trial.suggest_float('aug_p', 0.01, 0.5, log=True),
+        # 'p_dropout': trial.suggest_float('p_dropout', 0.01, 0.25, log=True),
     }
 
     train_dataset = H5Dataset(
@@ -40,7 +45,8 @@ def objective(trial):
         feats_path=H5_DIR_TRAIN,
         label_col=LABEL_COL,
         split='train',
-        id_col=ID_COL
+        id_col=ID_COL,
+        is_aug=IS_AUG,
     )
 
     val_dataset = H5Dataset(
@@ -78,7 +84,7 @@ if __name__ == "__main__":
     # Direction is MAXIMIZE because we are returning F1 Score
 
     study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=60)
+    study.optimize(objective, n_trials=65)
 
     optuna_df_path = "optuna_trials.csv"
     optuna_df = study.trials_dataframe()
