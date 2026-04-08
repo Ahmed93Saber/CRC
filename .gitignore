@@ -18,3 +18,10 @@
 /optuna_trials_cl_no_aug.csv
 /playground.py
 /playground.ipynb
+/features_conch_v15_CAL_AUG/
+/features_conch_v15_BAY/
+/artifacts_max_ce_no_aug/
+/artifacts_max_matrices/
+/artifacts_max_comb_loss/
+/artifacts_max_normalLoss_full/
+/artifacts_max_combLoss_full/

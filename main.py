@@ -5,7 +5,7 @@ from src.train import run_cross_validation
 from src.utils import get_device, seed_everything
 
 # --- Configuration ---
-CSV_PATH_TRAIN = './dataframes/structured_labels_biopsy_final_NEW.csv'
+CSV_PATH_TRAIN = './dataframes/combined_cohorts_CAL+BAY.csv'
 CSV_PATH_TEST = './dataframes/annotations_all_HunCRC_NEW.csv'
 H5_DIR_TRAIN = './features_conch_v15_CAL'
 H5_DIR_TEST = './features_conch_v15_HUN'
@@ -18,12 +18,16 @@ MAX_EPOCHS = 200
 IS_AUG = False
 
 
+EXP_NAME = input("Enter experiment name: ")
+
+
 def objective(trial):
     device = get_device()
     seed_everything(42)
 
     # Define Hyperparameters
     params = {
+        'exp_name': EXP_NAME,
         'input_dim': INPUT_DIM,
         'output_dim': OUTPUT_DIM,
         'label_col': LABEL_COL,
@@ -33,9 +37,9 @@ def objective(trial):
         'lr': trial.suggest_float('lr', 1e-5, 1e-2, log=True),
         'weight_decay': trial.suggest_float('weight_decay', 1e-6, 1e-3, log=True),
         'batch_size': trial.suggest_categorical('batch_size', [4, 8, 16]),
-        'loss_beta': trial.suggest_float('loss_beta', 0.01, 1.0, log=True),
-        'matrix_name': trial.suggest_categorical('matrix_name', ["baseline", "asymmetric_risk",
-                                                                "squared_distance", "malignant_bottleneck"]),
+        'loss_beta': trial.suggest_float('loss_beta', 0.05, 1.0, log=True),
+        'matrix_name': trial.suggest_categorical('matrix_name', ["asymmetric_risk",
+                                                                "squared_distance"]),
         # 'aug_p': trial.suggest_float('aug_p', 0.01, 0.5, log=True),
         # 'p_dropout': trial.suggest_float('p_dropout', 0.01, 0.25, log=True),
     }
@@ -84,9 +88,9 @@ if __name__ == "__main__":
     # Direction is MAXIMIZE because we are returning F1 Score
 
     study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=70)
+    study.optimize(objective, n_trials=30)
 
-    optuna_df_path = "optuna_trials.csv"
+    optuna_df_path = f"optuna_trials_{EXP_NAME}.csv"
     optuna_df = study.trials_dataframe()
     # remove the characters: user_attrs from the column names containing the user_attrs
     optuna_df.columns = [col.replace('user_attrs', '') for col in optuna_df.columns]

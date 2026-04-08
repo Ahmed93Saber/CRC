@@ -123,7 +123,7 @@ def run_cross_validation(datasets, params, device, trial=None, n_splits=5, epoch
     """Main Orchestrator: Runs stratified K-Fold cross validation and test set evaluation."""
     print(f"Starting {n_splits}-Fold Stratified CV ({n_splits} total runs)...")
 
-    save_dir = f"./artifacts_max/trial_{trial.number}" if trial else "./artifacts_max/default"
+    save_dir = f"./artifacts_max_{params['exp_name']}/trial_{trial.number}" if trial else f"./artifacts_max_{params['exp_name']}/default"
     model_dir = os.path.join(save_dir, "models")
     os.makedirs(model_dir, exist_ok=True)
 

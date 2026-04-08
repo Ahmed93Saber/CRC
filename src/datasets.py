@@ -21,6 +21,20 @@ class H5Dataset(Dataset):
         self.dropout_p = dropout_p
         self.aug_prob = aug_prob
 
+        # 1. Strip spaces from the entire column at once
+        # self.df[self.id_col] = self.df[self.id_col].astype(str).str.replace(" ", "")
+
+        # 2. Apply the zfill logic vectorized based on the split
+        if self.split in ('train', 'val'):
+            # Find the rows where cohort is CAL and pad them
+            cal_mask = self.df['cohort'] == 'CAL'
+            self.df.loc[cal_mask, self.id_col] = self.df.loc[cal_mask, self.id_col]   # .str.replace(" ", "")
+            self.df.loc[cal_mask, self.id_col] = self.df.loc[cal_mask, self.id_col].str.zfill(18)
+
+        elif self.split == 'test':
+            # Pad the whole column for the test split
+            self.df[self.id_col] = self.df[self.id_col].astype(str).str.zfill(3)
+
 
     def __len__(self):
         return len(self.df)
@@ -44,12 +58,9 @@ class H5Dataset(Dataset):
 
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
-        file_id = str(row[self.id_col]).replace(" ", "")
+        file_id = str(row[self.id_col])
 
-        if self.split == 'train' or self.split == 'val':
-            file_id = file_id.zfill(18)
-        elif self.split == 'test':
-            file_id = file_id.zfill(3)
+
 
         with h5py.File(os.path.join(self.feats_path, file_id + '.h5'), "r") as f:
             features = torch.from_numpy(f["features"][:])
