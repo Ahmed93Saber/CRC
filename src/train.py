@@ -30,7 +30,7 @@ def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, 
 
     # CE weight (alpha) = 1.0, Cost Matrix weight (beta) = 0.1
     criterion = CombinedCostLoss(cost_matrix, alpha=1.0, beta=params['loss_beta'])
-    early_stopper = EarlyStopping(patience=10, delta=0.001)
+    early_stopper = EarlyStopping(patience=8, delta=0.001)
 
     best_epoch_metrics = {'f1': 0, 'auc': 0, 'acc': 0, 'preds': [], 'truths': []}
 
@@ -57,12 +57,12 @@ def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, 
             ckpt_name = f"fold_{fold_idx}.pt"
             torch.save(model.state_dict(), os.path.join(model_dir, ckpt_name))
 
-        # # Optuna Pruning
-        # if trial is not None:
-        #     trial.report(val_results['f1'], epoch + (fold_idx * epochs))
-        #     if trial.should_prune():
-        #         print(f"  [INFO] Trial pruned by Optuna at fold {fold_idx + 1}, epoch {epoch + 1}")
-        #         raise optuna.TrialPruned()
+        # Optuna Pruning
+        if trial is not None:
+            trial.report(val_results['acc'], epoch + (fold_idx * epochs))
+            if trial.should_prune():
+                print(f"  [INFO] Trial pruned by Optuna at fold {fold_idx + 1}, epoch {epoch + 1}")
+                raise optuna.TrialPruned()
 
         early_stopper(val_results['acc'])
         if early_stopper.early_stop:

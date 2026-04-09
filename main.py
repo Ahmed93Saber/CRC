@@ -14,8 +14,9 @@ ID_COL = 'slide'
 INPUT_DIM = 768
 OUTPUT_DIM = 4  # e.g., Multi-class
 N_FOLDS = 5
-MAX_EPOCHS = 200
-IS_AUG = False
+MAX_EPOCHS = 100
+AUG_PROB = 0.25
+AUG_h5_DIR = "./features_conch_v15_CAL_AUG"
 
 
 EXP_NAME = input("Enter experiment name: ")
@@ -31,16 +32,16 @@ def objective(trial):
         'input_dim': INPUT_DIM,
         'output_dim': OUTPUT_DIM,
         'label_col': LABEL_COL,
-        'n_layers': trial.suggest_int('n_layers', 3, 5),
-        'hidden_dim': trial.suggest_categorical('hidden_dim', [256, 512, 1024]),
-        'n_heads': trial.suggest_categorical('n_heads', [3, 4, 6, 8]),
-        'lr': trial.suggest_float('lr', 1e-5, 1e-2, log=True),
+        'n_layers': trial.suggest_int('n_layers', 4, 5),
+        'hidden_dim': trial.suggest_categorical('hidden_dim', [512, 1024]),
+        'n_heads': trial.suggest_categorical('n_heads', [3, 4, 6]),
+        'lr': trial.suggest_float('lr', 1e-5, 1e-3, log=True),
         'weight_decay': trial.suggest_float('weight_decay', 1e-6, 1e-3, log=True),
-        'batch_size': trial.suggest_categorical('batch_size', [4, 8, 16]),
+        'batch_size': trial.suggest_categorical('batch_size', [8, 16]),
         'loss_beta': trial.suggest_float('loss_beta', 0.05, 1.0, log=True),
         'matrix_name': trial.suggest_categorical('matrix_name', ["asymmetric_risk",
                                                                 "squared_distance"]),
-        # 'aug_p': trial.suggest_float('aug_p', 0.01, 0.5, log=True),
+        'aug_p': trial.suggest_categorical('aug_p', [0.1, 0.15, 0.20, 0.25, 0.3]),
         # 'p_dropout': trial.suggest_float('p_dropout', 0.01, 0.25, log=True),
     }
 
@@ -50,7 +51,8 @@ def objective(trial):
         label_col=LABEL_COL,
         split='train',
         id_col=ID_COL,
-        is_aug=IS_AUG,
+        aug_prob=params['aug_p'],
+        aug_feats_path=AUG_h5_DIR,
     )
 
     val_dataset = H5Dataset(
@@ -88,7 +90,7 @@ if __name__ == "__main__":
     # Direction is MAXIMIZE because we are returning F1 Score
 
     study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=30)
+    study.optimize(objective, n_trials=25)
 
     optuna_df_path = f"optuna_trials_{EXP_NAME}.csv"
     optuna_df = study.trials_dataframe()

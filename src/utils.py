@@ -40,7 +40,7 @@ def calculate_metrics(y_true, y_pred):
     return bal_acc, f1
 
 class EarlyStopping:
-    def __init__(self, patience=20, delta=0):
+    def __init__(self, patience=10, delta=0):
         """
         Args:
             patience (int): How many epochs to wait after last time validation score improved.
