@@ -87,6 +87,7 @@ def evaluate_test_set(test_dataset, params, device, model_dir, n_splits):
         model_path = os.path.join(model_dir, f"fold_{k}.pt")
         model = BinaryClassificationModel(
             output_dim=params['output_dim'],
+            moe_args=params.get('moe_args', None),  # Add this line
             n_heads=params['n_heads'],
             hidden_dim=params['hidden_dim'],
         ).to(device)

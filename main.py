@@ -17,7 +17,7 @@ ID_COL = 'slide'
 INPUT_DIM = 768
 OUTPUT_DIM = 4  # e.g., Multi-class
 N_FOLDS = 5
-MAX_EPOCHS = 200
+MAX_EPOCHS = 1
 AUG_h5_DIR = "./features_conch_v15_CAL_AUG"
 
 
