@@ -57,12 +57,12 @@ def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, 
             ckpt_name = f"fold_{fold_idx}.pt"
             torch.save(model.state_dict(), os.path.join(model_dir, ckpt_name))
 
-        # Optuna Pruning
-        if trial is not None:
-            trial.report(val_results['acc'], epoch + (fold_idx * epochs))
-            if trial.should_prune():
-                print(f"  [INFO] Trial pruned by Optuna at fold {fold_idx + 1}, epoch {epoch + 1}")
-                raise optuna.TrialPruned()
+        # # Optuna Pruning
+        # if trial is not None:
+        #     trial.report(val_results['acc'], epoch + (fold_idx * epochs))
+        #     if trial.should_prune():
+        #         print(f"  [INFO] Trial pruned by Optuna at fold {fold_idx + 1}, epoch {epoch + 1}")
+        #         raise optuna.TrialPruned()
 
         early_stopper(val_results['acc'])
         if early_stopper.early_stop:

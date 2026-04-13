@@ -14,8 +14,7 @@ ID_COL = 'slide'
 INPUT_DIM = 768
 OUTPUT_DIM = 4  # e.g., Multi-class
 N_FOLDS = 5
-MAX_EPOCHS = 100
-AUG_PROB = 0.25
+MAX_EPOCHS = 200
 AUG_h5_DIR = "./features_conch_v15_CAL_AUG"
 
 
@@ -90,7 +89,7 @@ if __name__ == "__main__":
     # Direction is MAXIMIZE because we are returning F1 Score
 
     study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=25)
+    study.optimize(objective, n_trials=36)
 
     optuna_df_path = f"optuna_trials_{EXP_NAME}.csv"
     optuna_df = study.trials_dataframe()

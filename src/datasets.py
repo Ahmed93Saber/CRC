@@ -28,7 +28,7 @@ class H5Dataset(Dataset):
         if self.split in ('train', 'val'):
             # Find the rows where cohort is CAL and pad them
             cal_mask = self.df['cohort'] == 'CAL'
-            self.df.loc[cal_mask, self.id_col] = self.df.loc[cal_mask, self.id_col]   # .str.replace(" ", "")
+            self.df.loc[cal_mask, self.id_col] = self.df.loc[cal_mask, self.id_col].astype(str)   # .str.replace(" ", "")
             self.df.loc[cal_mask, self.id_col] = self.df.loc[cal_mask, self.id_col].str.zfill(18)
 
         elif self.split == 'test':
