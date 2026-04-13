@@ -3,6 +3,9 @@ import os
 from src.datasets import H5Dataset
 from src.train import run_cross_validation
 from src.utils import get_device, seed_everything
+import warnings
+
+warnings.filterwarnings("ignore", category=UserWarning, message=".*non-tuple sequence for multidimensional indexing.*")
 
 # --- Configuration ---
 CSV_PATH_TRAIN = './dataframes/combined_cohorts_CAL+BAY.csv'
@@ -21,6 +24,9 @@ AUG_h5_DIR = "./features_conch_v15_CAL_AUG"
 EXP_NAME = input("Enter experiment name: ")
 
 
+
+
+
 def objective(trial):
     device = get_device()
     seed_everything(42)
@@ -31,7 +37,7 @@ def objective(trial):
         'input_dim': INPUT_DIM,
         'output_dim': OUTPUT_DIM,
         'label_col': LABEL_COL,
-        'n_layers': trial.suggest_int('n_layers', 4, 5),
+        'n_layers': trial.suggest_int('n_layers', 3, 5),
         'hidden_dim': trial.suggest_categorical('hidden_dim', [512, 1024]),
         'n_heads': trial.suggest_categorical('n_heads', [3, 4, 6]),
         'lr': trial.suggest_float('lr', 1e-5, 1e-3, log=True),
@@ -43,6 +49,23 @@ def objective(trial):
         'aug_p': trial.suggest_categorical('aug_p', [0.1, 0.15, 0.20, 0.25, 0.3]),
         # 'p_dropout': trial.suggest_float('p_dropout', 0.01, 0.25, log=True),
     }
+
+    moe_args = {
+        "input_dim": INPUT_DIM,
+        "dim": params['hidden_dim'],
+        "num_experts": 30,
+        "num_slots": 10,
+        "num_heads": 16,
+        "slot_dim": 256,
+        "keep_slots": True,  # if True, return the E*S aggregated features instead of the N transformed patch features
+        "share_lora_weights": True,  # share the weights of the first low rank layer
+        "dropout": 0.1,
+        "auto_rank": True,  # automatically calculate the appropriate low rank for parameter efficiency
+    }
+
+    params['moe_args'] = moe_args
+
+
 
     train_dataset = H5Dataset(
         csv_path=CSV_PATH_TRAIN,
@@ -91,7 +114,7 @@ if __name__ == "__main__":
     study = optuna.create_study(direction="maximize")
     study.optimize(objective, n_trials=36)
 
-    optuna_df_path = f"optuna_trials_{EXP_NAME}.csv"
+    optuna_df_path = f"./optuna_results/optuna_trials_{EXP_NAME}.csv"
     optuna_df = study.trials_dataframe()
     # remove the characters: user_attrs from the column names containing the user_attrs
     optuna_df.columns = [col.replace('user_attrs', '') for col in optuna_df.columns]

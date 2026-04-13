@@ -1,9 +1,6 @@
 /features_conch_v15/
 /artifacts_max/
 /dataframes/
-/optuna_trials.csv
-/optuna_trials_auc.csv
-/optuna_trials_f1.csv
 /trident/
 /heatmaps/
 /temp_models/
@@ -13,15 +10,9 @@
 /features_conch_v15_CAL/
 /features_conch_v15_HUN/
 /CRC_Project.pptx
-/artifacts_max_cl_no_aug/
-/optuna_trials_ce_no_aug.csv
-/optuna_trials_cl_no_aug.csv
 /playground.py
 /playground.ipynb
 /features_conch_v15_CAL_AUG/
 /features_conch_v15_BAY/
-/artifacts_max_ce_no_aug/
-/artifacts_max_matrices/
-/artifacts_max_comb_loss/
-/artifacts_max_normalLoss_full/
-/artifacts_max_combLoss_full/
+/artifacts/
+/optuna_results/

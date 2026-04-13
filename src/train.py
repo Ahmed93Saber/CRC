@@ -19,6 +19,7 @@ def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, 
     """Handles the training, validation, and early stopping for a single fold."""
     model = BinaryClassificationModel(
         output_dim=params['output_dim'],
+        moe_args=params.get('moe_args', None),
         n_heads=params['n_heads'],
         hidden_dim=params['hidden_dim'],
     ).to(device)
@@ -57,12 +58,12 @@ def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, 
             ckpt_name = f"fold_{fold_idx}.pt"
             torch.save(model.state_dict(), os.path.join(model_dir, ckpt_name))
 
-        # # Optuna Pruning
-        # if trial is not None:
-        #     trial.report(val_results['acc'], epoch + (fold_idx * epochs))
-        #     if trial.should_prune():
-        #         print(f"  [INFO] Trial pruned by Optuna at fold {fold_idx + 1}, epoch {epoch + 1}")
-        #         raise optuna.TrialPruned()
+        # Optuna Pruning
+        if trial is not None:
+            trial.report(val_results['acc'], epoch + (fold_idx * epochs))
+            if trial.should_prune():
+                print(f"  [INFO] Trial pruned by Optuna at fold {fold_idx + 1}, epoch {epoch + 1}")
+                raise optuna.TrialPruned()
 
         early_stopper(val_results['acc'])
         if early_stopper.early_stop:
@@ -123,7 +124,7 @@ def run_cross_validation(datasets, params, device, trial=None, n_splits=5, epoch
     """Main Orchestrator: Runs stratified K-Fold cross validation and test set evaluation."""
     print(f"Starting {n_splits}-Fold Stratified CV ({n_splits} total runs)...")
 
-    save_dir = f"./artifacts_max_{params['exp_name']}/trial_{trial.number}" if trial else f"./artifacts_max_{params['exp_name']}/default"
+    save_dir = f"./artifacts/{params['exp_name']}/trial_{trial.number}" if trial else f"./artifacts_max_{params['exp_name']}/default"
     model_dir = os.path.join(save_dir, "models")
     os.makedirs(model_dir, exist_ok=True)
 
