@@ -8,18 +8,24 @@ COST_MATRICES = {
         [0.0, 3.0, 0.0, 5.0],
         [2.0, 10.0, 5.0, 0.0]
     ],
+    # penalize false negatives much harder than false positives.
     "asymmetric_risk": [
         [0.0, 1.0, 3.0, 8.0],
         [3.0, 0.0, 2.0, 6.0],
         [8.0, 4.0, 0.0, 4.0],
         [20.0, 15.0, 5.0, 0.0]
     ],
+    # The penalty grows exponentially the further
+    # the model's prediction is from the truth
     "squared_distance": [
         [0.0, 1.0, 4.0, 9.0],
         [1.0, 0.0, 1.0, 4.0],
         [4.0, 1.0, 0.0, 1.0],
         [9.0, 4.0, 1.0, 0.0]
     ],
+    # never misses an Adenocarcinoma, but
+    # don't care as much if it slightly scrambles
+    # the dysplasias and normal tissues among themselves
     "malignant_bottleneck": [
         [0.0, 1.0, 1.0, 10.0],
         [1.0, 0.0, 1.0, 10.0],
