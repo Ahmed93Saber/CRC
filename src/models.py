@@ -3,7 +3,7 @@ from src.trident_load import ABMILSlideEncoder
 from mammoth import Mammoth
 
 
-class BinaryClassificationModel(nn.Module):
+class ClassificationModel(nn.Module):
     def __init__(self, input_feature_dim=768, moe_args=None, n_heads=1, head_dim=512, dropout=0.,
                  gated=True, hidden_dim=256, output_dim=2):
         super().__init__()
