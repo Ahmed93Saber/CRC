@@ -14,15 +14,20 @@ def train_one_epoch(model, train_loader, criterion, optimizer, device):
     # Unpack 4 items: features, labels, ids, pdl1
     # We ignore ids and pdl1 during training using '_'
     for features, labels, _ in train_loader:
-        features, labels = {'features': features.to(device)}, labels.to(device)
+        # features, labels = {'features': features.to(device)}, labels.to(device)
+        features, labels = features.to(device), labels.to(device)
 
         optimizer.zero_grad()
         outputs = model(features)
+        if isinstance(outputs, tuple):
+            outputs = outputs[0]['logits']
+
         loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
 
-        running_loss += loss.item() * features['features'].size(0)
+        # running_loss += loss.item() * features['features'].size(0)
+        running_loss += loss.item() * features.size(0)
 
     return running_loss / len(train_loader.dataset)
 
@@ -41,11 +46,16 @@ def evaluate_model(model, val_loader, criterion, device):
 
     with torch.no_grad():
         for features, labels, file_ids in val_loader:
-            features, labels = {'features': features.to(device)}, labels.to(device)
+            # features, labels = {'features': features.to(device)}, labels.to(device)
+            features, labels = features.to(device), labels.to(device)
             outputs = model(features)
+            if isinstance(outputs, tuple):
+                outputs = outputs[0]['logits']
+
             loss = criterion(outputs, labels)
 
-            running_loss += loss.item() * features['features'].size(0)
+            # running_loss += loss.item() * features['features'].size(0)
+            running_loss += loss.item() * features.size(0)
 
             # Apply softmax to get probabilities
             probs = torch.softmax(outputs, dim=1)

@@ -86,10 +86,13 @@ class CombinedCostLoss(nn.Module):
 
     def forward(self, logits, targets):
         # 1. Standard Cross-Entropy Loss
-        ce = self.ce_loss(logits, targets)
+        if isinstance(logits, tuple):
+            logits = logits[0]['logits']
 
         # 2. Cost-Sensitive Loss
+        ce = self.ce_loss(logits, targets)
         probs = F.softmax(logits, dim=1)
+
         batch_costs = self.cost_matrix[targets]
         expected_costs = torch.sum(probs * batch_costs, dim=1)
         cs = expected_costs.mean()
@@ -97,3 +100,24 @@ class CombinedCostLoss(nn.Module):
         # 3. Combine them
         total_loss = (self.alpha * ce) + (self.beta * cs)
         return total_loss
+
+
+def calculate_accuracies(predictions, ground_truths):
+    """
+    Calculate accuracy for each fold individually.
+
+    Args:
+        predictions (np.array): 2D array of shape (num_folds, num_samples) containing predicted labels for each fold.
+        ground_truths (np.array): 1D array of shape (num_samples,) containing the true labels.
+    """
+
+
+
+    # Calculate accuracy for each fold individually
+    ground_truths_int = ground_truths[0,:].astype(int)
+    fold_accuracies = []
+    for i in range(predictions.shape[0]):
+        fold_pred = predictions[i, :]
+        # Compare fold predictions to ground truth
+        acc = np.mean(fold_pred == ground_truths_int)
+        fold_accuracies.append(acc)

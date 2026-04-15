@@ -10,15 +10,15 @@ warnings.filterwarnings("ignore", category=UserWarning, message=".*non-tuple seq
 # --- Configuration ---
 CSV_PATH_TRAIN = './dataframes/combined_cohorts_CAL+BAY.csv'
 CSV_PATH_TEST = './dataframes/annotations_all_HunCRC_NEW.csv'
-H5_DIR_TRAIN = './features_conch_v15_CAL'
-H5_DIR_TEST = './features_conch_v15_HUN'
+H5_DIR_TRAIN = 'features/features_conch_v15_CAL'
+H5_DIR_TEST = 'features/features_conch_v15_HUN'
 LABEL_COL = 'label'
 ID_COL = 'slide'
 INPUT_DIM = 768
 OUTPUT_DIM = 4  # e.g., Multi-class
 N_FOLDS = 5
 MAX_EPOCHS = 200
-AUG_h5_DIR = "./features_conch_v15_CAL_AUG"
+AUG_h5_DIR = "features/features_conch_v15_CAL_AUG"
 
 
 EXP_NAME = input("Enter experiment name: ")
@@ -37,9 +37,9 @@ def objective(trial):
         'input_dim': INPUT_DIM,
         'output_dim': OUTPUT_DIM,
         'label_col': LABEL_COL,
-        'n_layers': trial.suggest_int('n_layers', 3, 5),
-        'hidden_dim': trial.suggest_categorical('hidden_dim', [512, 1024]),
-        'n_heads': trial.suggest_categorical('n_heads', [3, 4, 6]),
+        # 'n_layers': trial.suggest_int('n_layers', 3, 5),
+        # 'hidden_dim': trial.suggest_categorical('hidden_dim', [512, 1024]),
+        # 'n_heads': trial.suggest_categorical('n_heads', [3, 4, 6]),
         'lr': trial.suggest_float('lr', 1e-5, 1e-3, log=True),
         'weight_decay': trial.suggest_float('weight_decay', 1e-6, 1e-3, log=True),
         'batch_size': trial.suggest_categorical('batch_size', [8, 16]),
@@ -52,7 +52,7 @@ def objective(trial):
 
     moe_args = {
         "input_dim": INPUT_DIM,
-        "dim": params['hidden_dim'],
+        # "dim": params['hidden_dim'],
         "num_experts": 30,
         "num_slots": 10,
         "num_heads": 16,
