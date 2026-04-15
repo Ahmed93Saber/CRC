@@ -110,14 +110,13 @@ def calculate_accuracies(predictions, ground_truths):
         predictions (np.array): 2D array of shape (num_folds, num_samples) containing predicted labels for each fold.
         ground_truths (np.array): 1D array of shape (num_samples,) containing the true labels.
     """
-
-
-
     # Calculate accuracy for each fold individually
-    ground_truths_int = ground_truths[0,:].astype(int)
+
     fold_accuracies = []
     for i in range(predictions.shape[0]):
         fold_pred = predictions[i, :]
         # Compare fold predictions to ground truth
-        acc = np.mean(fold_pred == ground_truths_int)
+        acc = np.mean(fold_pred == ground_truths)
         fold_accuracies.append(acc)
+
+    return fold_accuracies
