@@ -111,6 +111,15 @@ def save_optuna_artifacts(save_dir, test_data):
     save_obj("file_ids", test_data['ids'])
 
 
+def save_validation_artifacts(save_dir, val_data):
+    """Helper function to save validation predictions and labels for each fold."""
+    def save_obj(name, data):
+        np.save(f"{save_dir}/{name}.npy", np.array(data, dtype=object))
+
+    save_obj("val_predictions", val_data['preds'])
+    save_obj("val_ground_truths", val_data['truths'])
+
+
 def run_cross_validation(datasets, params, device, trial=None, n_splits=5, epochs=50):
     """Main Orchestrator: Runs stratified K-Fold cross validation and test set evaluation."""
     print(f"Starting {n_splits}-Fold Stratified CV ({n_splits} total runs)...")
@@ -128,6 +137,9 @@ def run_cross_validation(datasets, params, device, trial=None, n_splits=5, epoch
     fold_overall_f1s = []
     fold_overall_aucs = []
     fold_overall_accs = []
+    val_data = {
+        'preds': [], 'truths': []
+    }
 
     for current_fold, (train_ids, val_ids) in enumerate(skf.split(dummy_X, labels_list)):
         print(f"\n--- Run {current_fold + 1}/{n_splits} | Fold {current_fold + 1} ---")
@@ -155,6 +167,10 @@ def run_cross_validation(datasets, params, device, trial=None, n_splits=5, epoch
         fold_overall_aucs.append(best_epoch_metrics['auc'])
         fold_overall_accs.append(best_epoch_metrics['acc'])
 
+        # Collect validation predictions and labels for each fold
+        val_data['preds'].append(best_epoch_metrics['preds'])
+        val_data['truths'].append(best_epoch_metrics['truths'])
+
     avg_f1_overall = np.mean(fold_overall_f1s)
     avg_auc_overall = np.mean(fold_overall_aucs)
     avg_acc_overall = np.mean(fold_overall_accs)
@@ -167,6 +183,9 @@ def run_cross_validation(datasets, params, device, trial=None, n_splits=5, epoch
         if avg_auc_overall > 0.85 and avg_f1_overall > 0.85:
             print(
                 f"  [INFO] Validation targets met (AUC: {avg_auc_overall:.4f}, F1: {avg_f1_overall:.4f}). Evaluating Test Set...")
+
+            # Save validation predictions and labels
+            save_validation_artifacts(save_dir, val_data)
 
             test_data = evaluate_test_set(datasets['test'], params, device, model_dir, n_splits)
 
