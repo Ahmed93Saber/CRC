@@ -1,6 +1,5 @@
 import torch
 
-# Define your matrices here as standard Python dictionaries/lists
 COST_MATRICES = {
     "baseline": [
         [0.0, 0.0, 0.0, 2.0],
