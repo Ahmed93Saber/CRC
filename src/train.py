@@ -111,13 +111,14 @@ def save_optuna_artifacts(save_dir, test_data):
     save_obj("file_ids", test_data['ids'])
 
 
-def save_validation_artifacts(save_dir, val_data):
-    """Helper function to save validation predictions and labels for each fold."""
+def save_validation_artifacts(save_dir, val_data, val_ids):
+    """Helper function to save validation predictions, labels, and file IDs for each fold."""
     def save_obj(name, data):
         np.save(f"{save_dir}/{name}.npy", np.array(data, dtype=object))
 
     save_obj("val_predictions", val_data['preds'])
     save_obj("val_ground_truths", val_data['truths'])
+    save_obj("val_file_ids", val_ids)
 
 
 def run_cross_validation(datasets, params, device, trial=None, n_splits=5, epochs=50):
@@ -185,7 +186,7 @@ def run_cross_validation(datasets, params, device, trial=None, n_splits=5, epoch
                 f"  [INFO] Validation targets met (AUC: {avg_auc_overall:.4f}, F1: {avg_f1_overall:.4f}). Evaluating Test Set...")
 
             # Save validation predictions and labels
-            save_validation_artifacts(save_dir, val_data)
+            save_validation_artifacts(save_dir, val_data, val_ids)
 
             test_data = evaluate_test_set(datasets['test'], params, device, model_dir, n_splits)
 
