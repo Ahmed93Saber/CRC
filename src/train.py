@@ -10,9 +10,10 @@ import shutil
 import optuna
 
 from millab.src.builder import create_model
-from src.utils import EarlyStopping, CombinedCostLoss
+from src.utils import (EarlyStopping, CPLS_CombinedCostLoss, initialize_uniform_smoothing,
+                       compute_cpls_matrix, update_confusion_matrix)
 from src.engine import train_one_epoch, evaluate_model
-from src.cost_matrices import get_cost_matrix          # Import the new getter
+from src.cost_matrices import get_cost_matrix
 
 
 def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, model_dir, trial=None, epochs=50):
@@ -25,14 +26,30 @@ def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, 
     cost_matrix = get_cost_matrix(params['matrix_name'], device)
 
     # CE weight (alpha) = 1.0, Cost Matrix weight (beta) = 0.1
-    criterion = CombinedCostLoss(cost_matrix, alpha=1.0, beta=params['loss_beta'])
+    criterion = CPLS_CombinedCostLoss(cost_matrix, alpha=1.0, beta=params['loss_beta'])
     early_stopper = EarlyStopping(patience=8, delta=0.001)
 
     best_epoch_metrics = {'f1': 0, 'auc': 0, 'acc': 0, 'preds': [], 'truths': []}
 
-    for epoch in range(epochs):
-        _ = train_one_epoch(model, train_loader, criterion, optimizer, device)
+    cpls_alpha = params.get('cpls_alpha', 0.1)  # Default smoothing factor
+    num_classes = 4
+    current_smoothing_matrix = initialize_uniform_smoothing(num_classes, alpha=cpls_alpha)
 
+    for epoch in range(epochs):
+        # Create an empty confusion matrix to track this epoch's mistakes
+        epoch_cm = torch.zeros((num_classes, num_classes))
+        _ = train_one_epoch(
+            model,
+            train_loader,
+            criterion,
+            optimizer,
+            device,
+            current_smoothing_matrix=current_smoothing_matrix,
+            epoch_cm=epoch_cm
+        )
+
+        # Update the smoothing matrix for the NEXT epoch based on this epoch's mistakes
+        current_smoothing_matrix = compute_cpls_matrix(epoch_cm, num_classes, alpha=cpls_alpha)
         # Catch the dictionary instead of unpacking a tuple
         val_results = evaluate_model(model, val_loader, criterion, device)
 

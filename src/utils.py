@@ -120,3 +120,88 @@ def calculate_accuracies(predictions, ground_truths):
         fold_accuracies.append(acc)
 
     return fold_accuracies
+
+
+class CPLS_CombinedCostLoss(nn.Module):
+    def __init__(self, cost_matrix, alpha=1.0, beta=0.1):
+        super(CPLS_CombinedCostLoss, self).__init__()
+        self.cost_matrix = cost_matrix
+        self.alpha = alpha
+        self.beta = beta
+        # Initialize standard CE for validation fallback
+        self.standard_ce = nn.CrossEntropyLoss()
+
+    def forward(self, logits, hard_targets, soft_targets=None):
+        # 1. Standard Cross-Entropy
+        if soft_targets is not None:
+            # Used during TRAINING with dynamic CPLS targets
+            ce_loss = F.cross_entropy(logits, soft_targets)
+        else:
+            # Used during VALIDATION/TESTING with hard clinical targets
+            ce_loss = self.standard_ce(logits, hard_targets)
+
+        # 2. Cost-Sensitive Loss (Always anchors to hard clinical truth)
+        probs = F.softmax(logits, dim=1)
+        batch_costs = self.cost_matrix[hard_targets]
+        expected_costs = torch.sum(probs * batch_costs, dim=1)
+        cs_loss = expected_costs.mean()
+
+        # 3. Combine
+        total_loss = (self.alpha * ce_loss) + (self.beta * cs_loss)
+        return total_loss
+
+
+
+def initialize_uniform_smoothing(num_classes: int, alpha: float = 0.1) -> torch.Tensor:
+    """
+    Creates a standard label smoothing matrix.
+    Returns a [num_classes, num_classes] tensor where row i is the soft target for true class i.
+    """
+    # Calculate the uniform penalty mass for incorrect classes
+    smooth_val = alpha / (num_classes - 1)
+
+    # Initialize a matrix filled with the smoothing value
+    smoothing_matrix = torch.full((num_classes, num_classes), smooth_val)
+
+    # Override the diagonal (the true classes) with the primary confidence mass
+    smoothing_matrix.fill_diagonal_(1.0 - alpha)
+
+    return smoothing_matrix
+
+
+def compute_cpls_matrix(confusion_matrix: torch.Tensor, num_classes: int = 4, alpha: float = 0.1) -> torch.Tensor:
+    """
+    Updates the soft target smoothing matrix based on empirical confusion from the previous epoch.
+    """
+    new_smoothing_matrix = torch.zeros((num_classes, num_classes))
+
+    for i in range(num_classes):
+        # 1. Isolate the errors for true class i
+        row_errors = confusion_matrix[i].clone()
+        row_errors[i] = 0.0  # Zero out the correct predictions, we only care about mistakes
+
+        total_errors = row_errors.sum()
+
+        # 2. Calculate distribution weights for the alpha mass
+        if total_errors > 0:
+            # Distribute alpha proportionally to how often this specific mistake was made
+            error_distribution = row_errors / total_errors
+        else:
+            # Fallback: If the model got 100% accuracy on this class, revert to uniform smoothing
+            error_distribution = torch.full((num_classes,), 1.0 / (num_classes - 1))
+            error_distribution[i] = 0.0
+
+        # 3. Construct the new soft target row
+        new_smoothing_matrix[i] = error_distribution * alpha
+        new_smoothing_matrix[i, i] = 1.0 - alpha
+
+    return new_smoothing_matrix
+
+
+def update_confusion_matrix(conf_matrix: torch.Tensor, targets: torch.Tensor, preds: torch.Tensor):
+    """
+    Helper function to tally predictions during the training loop.
+    Call this inside your batch loop: update_confusion_matrix(epoch_cm, hard_targets, preds)
+    """
+    for t, p in zip(targets.view(-1), preds.view(-1)):
+        conf_matrix[t.long(), p.long()] += 1
