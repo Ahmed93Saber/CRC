@@ -18,7 +18,7 @@ from src.cost_matrices import get_cost_matrix
 
 def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, model_dir, trial=None, epochs=50):
     """Handles the training, validation, and early stopping for a single fold."""
-    model = create_model('abmil.base_mammoth.conch_v15', num_classes=4).to(device)
+    model = create_model('abmil.base_mammoth.uni_v2', num_classes=4).to(device)
 
     optimizer = optim.AdamW(model.parameters(), lr=params['lr'], weight_decay=params['weight_decay'])
     # 0: Others, 1: Low-Grade, 2: High-Grade, 3: Adenocarcinoma
@@ -218,7 +218,7 @@ def run_cross_validation(datasets, params, device, trial=None, n_splits=5, epoch
             trial.set_user_attr("avg_precision_test", float(np.mean(test_data['precs'])))
             trial.set_user_attr("avg_recall_test", float(np.mean(test_data['recs'])))
 
-            if avg_test_auc > 0.8 and avg_test_f1 > 0.8:
+            if avg_test_auc > 0.9 and avg_test_f1 > 0.8:
                 print(
                     f"  [SUCCESS] Test targets met (AUC: {avg_test_auc:.4f}, F1: {avg_test_f1:.4f}). Models retained in {model_dir}")
                 save_optuna_artifacts(save_dir, test_data)

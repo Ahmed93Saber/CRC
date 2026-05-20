@@ -62,7 +62,10 @@ class H5Dataset(Dataset):
             print("STOP")
 
         if self.split == 'train':
-            num_available = features.shape[0]
+            try:
+                num_available = features.shape[0]
+            except Exception as e:
+                print(e)
             if num_available >= self.num_features:
                 indices = torch.randperm(num_available, generator=torch.Generator())[
                     :self.num_features]

@@ -10,11 +10,13 @@ warnings.filterwarnings("ignore", category=UserWarning, message=".*non-tuple seq
 # --- Configuration ---
 CSV_PATH_TRAIN = './dataframes/combined_cohorts_CAL+BAY.csv'
 CSV_PATH_TEST = './dataframes/annotations_all_HunCRC_NEW.csv'
-H5_DIR_TRAIN = 'features/features_conch_v15_CAL'
-H5_DIR_TEST = 'features/features_conch_v15_HUN'
+# H5_DIR_TRAIN = 'features/features_conch_v15_CAL'
+H5_DIR_TRAIN = r"W:\pathologie\bioinfo-archive\TridentPipelineOutput\CRC\CaltagironeUNIV2\20x_256px_0px_overlap\features_uni_v2"
+# H5_DIR_TEST = 'features/features_conch_v15_HUN'
+H5_DIR_TEST = r"W:\pathologie\bioinfo-archive\TridentPipelineOutput\CRC\HunCRCUNIV2\20x_256px_0px_overlap\features_uni_v2"
 LABEL_COL = 'label'
 ID_COL = 'slide'
-INPUT_DIM = 768
+INPUT_DIM = 1536
 OUTPUT_DIM = 4  # e.g., Multi-class
 N_FOLDS = 5
 MAX_EPOCHS = 200
@@ -47,7 +49,7 @@ def objective(trial):
         'cpls_alpha': trial.suggest_float('cpls_alpha', 0.01, 0.15, log=True),
         'matrix_name': trial.suggest_categorical('matrix_name', ["asymmetric_risk",
                                                                 "squared_distance"]),
-        'aug_p': trial.suggest_categorical('aug_p', [0.1, 0.15, 0.20, 0.25, 0.3]),
+        'aug_p': 0.0 # trial.suggest_categorical('aug_p', [0.1, 0.15, 0.20, 0.25, 0.3]),
         # 'p_dropout': trial.suggest_float('p_dropout', 0.01, 0.25, log=True),
     }
 
