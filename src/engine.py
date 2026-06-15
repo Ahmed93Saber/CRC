@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from sklearn.metrics import roc_auc_score, precision_score, recall_score, balanced_accuracy_score, f1_score
+from sklearn.metrics import roc_auc_score, precision_score, recall_score, accuracy_score, f1_score
 from src.utils import update_confusion_matrix
 
 
@@ -84,7 +84,7 @@ def evaluate_model(model, val_loader, criterion, device):
     avg_method = 'binary' if num_classes == 2 else 'weighted'
 
     # Calculate dynamically based on class count
-    acc = balanced_accuracy_score(all_labels, all_preds)
+    acc = accuracy_score(all_labels, all_preds)
     f1 = f1_score(all_labels, all_preds, average=avg_method, zero_division=0)
     prec = precision_score(all_labels, all_preds, average=avg_method, zero_division=0)
     rec = recall_score(all_labels, all_preds, average=avg_method, zero_division=0)

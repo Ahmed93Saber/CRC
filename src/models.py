@@ -30,7 +30,7 @@ class ClassificationModel(nn.Module):
         )
 
     def forward(self, x, return_raw_attention=False):
-        x = self.fc(x.get('features'))
+        x = self.fc(x)
         if return_raw_attention:
             features, attn = self.feature_encoder(x, return_raw_attention=True)
         else:
