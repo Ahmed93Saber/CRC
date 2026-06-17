@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import math
+from nystrom_attention import NystromAttention
 
 
 class PPEG(nn.Module):
@@ -28,11 +29,19 @@ class TransLayer(nn.Module):
     def __init__(self, dim=512, num_heads=8, dropout=0.1):
         super().__init__()
         self.norm = nn.LayerNorm(dim)
-        self.attn = nn.MultiheadAttention(embed_dim=dim, num_heads=num_heads, dropout=dropout, batch_first=True)
+        self.attn = NystromAttention(
+            dim=dim,
+            dim_head=dim // num_heads,
+            heads=num_heads,
+            num_landmarks=256,  # Number of landmarks for approximation
+            pinv_iterations=6,  # Moore-Penrose iterations for approximating pseudo-inverse
+            residual=True,  # Residual connection on values
+            dropout=dropout
+        )
 
     def forward(self, x):
         x_norm = self.norm(x)
-        attn_out, _ = self.attn(x_norm, x_norm, x_norm)
+        attn_out = self.attn(x_norm)
         return x + attn_out
 
 
@@ -83,7 +92,6 @@ class TransMILEncoder(nn.Module):
         features = x[:, 0]
 
         if return_raw_attention:
-            # Safely return None for attention maps (bypassing step 5 requirements)
             return features, None
 
         return features
