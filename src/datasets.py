@@ -8,13 +8,13 @@ import pandas as pd
 
 class H5Dataset(Dataset):
     def __init__(self, feats_path: str, csv_path: str, id_col: str,
-                 label_col: str, split: str = 'train', num_features=512,
+                 label_col: str, split: str = 'train', num_features=4096,
                  aug_feats_path: str = None, aug_prob: float = 0.25):
 
         self.df = pd.read_csv(csv_path)
         self.feats_path = feats_path
-        self.aug_feats_path = aug_feats_path  # <-- Store aug path
-        self.aug_prob = aug_prob  # <-- Store aug probability
+        self.aug_feats_path = aug_feats_path
+        self.aug_prob = aug_prob
         self.num_features = num_features
         self.split = split
         self.id_col = id_col
