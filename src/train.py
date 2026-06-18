@@ -22,13 +22,14 @@ from src.models import ClassificationModel
 
 def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, model_dir, trial=None, epochs=50):
     """Handles the training, validation, and early stopping for a single fold."""
-    # model = create_model('abmil.base_mammoth.conch_v15', num_classes=4).to(device)
-    model = ClassificationModel(
-        moe_args=params['moe_args'],
-        output_dim=params['output_dim'],
-        n_heads=params['n_heads'],
-        hidden_dim=params['hidden_dim'],
-    ).to(device)
+    model = create_model('abmil.base_mammoth.conch_v15', num_classes=4).to(device)
+    # model = ClassificationModel(
+    #     moe_args=params['moe_args'],
+    #     output_dim=params['output_dim'],
+    #     n_heads=params['n_heads'],
+    #     hidden_dim=params['hidden_dim'],
+    #     encoder_type=params['encoder_type'],
+    # ).to(device)
 
     optimizer = optim.AdamW(model.parameters(), lr=params['lr'], weight_decay=params['weight_decay'])
     # 0: Others, 1: Low-Grade, 2: High-Grade, 3: Adenocarcinoma
@@ -107,13 +108,14 @@ def evaluate_test_set(test_dataset, params,  device, model_dir, n_splits):
 
     for k in range(n_splits):
         model_path = os.path.join(model_dir, f"fold_{k}.pt")
-        # model = create_model('abmil.base_mammoth.conch_v15', num_classes=4).to(device).to(device)
-        model = ClassificationModel(
-            moe_args=params['moe_args'],
-            output_dim=params['output_dim'],
-            n_heads=params['n_heads'],
-            hidden_dim=params['hidden_dim'],
-        ).to(device)
+        model = create_model('abmil.base_mammoth.conch_v15', num_classes=4).to(device).to(device)
+        # model = ClassificationModel(
+        #     moe_args=params['moe_args'],
+        #     output_dim=params['output_dim'],
+        #     n_heads=params['n_heads'],
+        #     hidden_dim=params['hidden_dim'],
+        #     encoder_type=params['encoder_type'],
+        # ).to(device)
         model.load_state_dict(torch.load(model_path))
 
         # Catch the dictionary
