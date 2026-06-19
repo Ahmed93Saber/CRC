@@ -16,49 +16,54 @@ from src.engine import train_one_epoch, evaluate_model
 from src.cost_matrices import get_cost_matrix
 
 from src.models import ClassificationModel
-
-
+from sklearn.utils.class_weight import compute_class_weight
 
 
 def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, model_dir, trial=None, epochs=50):
     """Handles the training, validation, and early stopping for a single fold."""
-    model = create_model('abmil.base_mammoth.conch_v15', num_classes=4).to(device)
+
+    model = create_model('abmil.base_mammoth.conch_v15', num_classes=4).to(device).to(device)
     # model = ClassificationModel(
     #     moe_args=params['moe_args'],
     #     output_dim=params['output_dim'],
     #     n_heads=params['n_heads'],
     #     hidden_dim=params['hidden_dim'],
-    #     encoder_type=params['encoder_type'],
     # ).to(device)
 
     optimizer = optim.AdamW(model.parameters(), lr=params['lr'], weight_decay=params['weight_decay'])
-    # 0: Others, 1: Low-Grade, 2: High-Grade, 3: Adenocarcinoma
-    # 1. Dynamically load the matrix onto the correct device
-    cost_matrix = get_cost_matrix(params['matrix_name'], device)
 
-    # CE weight (alpha) = 1.0, Cost Matrix weight (beta) = 0.1
-    criterion = CPLS_CombinedCostLoss(cost_matrix, alpha=1.0, beta=params['loss_beta'])
+    # --- Calculate Class Weights for Cross-Entropy ---
+    # Extract labels from the current fold's training loader
+    train_labels = []
+    # If your dataset directly exposes labels (e.g., train_loader.dataset.dataset.labels),
+    # you can use that instead of iterating to save time.
+    for _, labels, _ in train_loader:
+        train_labels.extend(labels.cpu().numpy())
+
+    # Compute balanced weights: n_samples / (n_classes * np.bincount(y))
+    class_weights = compute_class_weight(
+        class_weight='balanced',
+        classes=np.unique(train_labels),
+        y=train_labels
+    )
+    class_weights_tensor = torch.tensor(class_weights, dtype=torch.float).to(device)
+
+    # Use standard Cross Entropy with the calculated class weights
+    criterion = nn.CrossEntropyLoss(weight=class_weights_tensor)
+
     early_stopper = EarlyStopping(patience=8, delta=0.001)
-
     best_epoch_metrics = {'f1': 0, 'auc': 0, 'acc': 0, 'preds': [], 'truths': []}
 
-    cpls_alpha = params.get('cpls_alpha', 0.1)  # Default smoothing factor
-    num_classes = 4
-    current_smoothing_matrix = initialize_uniform_smoothing(num_classes, alpha=cpls_alpha)
-
     for epoch in range(epochs):
-        # Create an empty confusion matrix to track this epoch's mistakes
+        # Call train_one_epoch without any smoothing or cost matrices
         _ = train_one_epoch(
             model,
             train_loader,
             criterion,
             optimizer,
-            device,
-            current_smoothing_matrix=current_smoothing_matrix,
-            epoch_cm=None
+            device
         )
 
-        # Catch the dictionary instead of unpacking a tuple
         val_results = evaluate_model(model, val_loader, criterion, device)
 
         if (epoch + 1) % 10 == 0:

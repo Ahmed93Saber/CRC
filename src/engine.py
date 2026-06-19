@@ -4,9 +4,9 @@ from sklearn.metrics import roc_auc_score, precision_score, recall_score, accura
 from src.utils import update_confusion_matrix
 
 
-def train_one_epoch(model, train_loader, criterion, optimizer, device, current_smoothing_matrix=None, epoch_cm=None):
+def train_one_epoch(model, train_loader, criterion, optimizer, device):
     """
-    Performs one epoch of training, with support for dynamic CPLS targets.
+    Performs one epoch of training using standard class-weighted cross entropy.
     """
     model.train()
     running_loss = 0.0
@@ -14,28 +14,18 @@ def train_one_epoch(model, train_loader, criterion, optimizer, device, current_s
     for features, labels, _ in train_loader:
         features, labels = features.to(device), labels.to(device)
 
-        # Determine if we are using dynamic soft targets for CPLS
-        if current_smoothing_matrix is not None:
-            soft_targets = current_smoothing_matrix.to(device)[labels]
-        else:
-            soft_targets = None
-
         optimizer.zero_grad()
         outputs = model(features)
+
         if isinstance(outputs, tuple):
             outputs = outputs[0]['logits']
 
-        # Pass both targets to the criterion (soft_targets will be None if not using CPLS)
-        loss = criterion(outputs, labels, soft_targets=soft_targets)
+        # Standard loss calculation using the weighted CrossEntropyLoss
+        loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
 
         running_loss += loss.item() * features.size(0)
-
-        # # Track predictions for CPLS updates
-        # if epoch_cm is not None:
-        #     preds = torch.argmax(outputs, dim=1)
-        #     update_confusion_matrix(epoch_cm, labels.cpu(), preds.cpu())
 
     return running_loss / len(train_loader.dataset)
 

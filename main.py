@@ -42,8 +42,8 @@ def objective(trial):
               'lr': trial.suggest_float('lr', 1e-5, 1e-3, log=True),
               'weight_decay': trial.suggest_float('weight_decay', 1e-6, 1e-3, log=True),
               'batch_size': trial.suggest_categorical('batch_size', [8, 16]),
-              'loss_beta': trial.suggest_float('loss_beta', 0.05, 1.0, log=True),
-              'cpls_alpha': trial.suggest_float('cpls_alpha', 0.01, 0.25, log=True),
+              'loss_beta': 0, # trial.suggest_float('loss_beta', 0.05, 1.0, log=True),
+              'cpls_alpha': 0, # trial.suggest_float('cpls_alpha', 0.01, 0.25, log=True),
               'matrix_name': "asymmetric_risk",  #  trial.suggest_categorical('matrix_name', ["asymmetric_risk", "squared_distance"]),
               'aug_p': trial.suggest_categorical('aug_p', [0.1, 0.15, 0.20, 0.25, 0.3]), 'moe_args': None}
 
