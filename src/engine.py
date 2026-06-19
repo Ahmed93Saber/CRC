@@ -32,10 +32,10 @@ def train_one_epoch(model, train_loader, criterion, optimizer, device, current_s
 
         running_loss += loss.item() * features.size(0)
 
-        # Track predictions for CPLS updates
-        if epoch_cm is not None:
-            preds = torch.argmax(outputs, dim=1)
-            update_confusion_matrix(epoch_cm, labels.cpu(), preds.cpu())
+        # # Track predictions for CPLS updates
+        # if epoch_cm is not None:
+        #     preds = torch.argmax(outputs, dim=1)
+        #     update_confusion_matrix(epoch_cm, labels.cpu(), preds.cpu())
 
     return running_loss / len(train_loader.dataset)
 

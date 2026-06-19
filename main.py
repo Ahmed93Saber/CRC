@@ -34,24 +34,18 @@ def objective(trial):
     seed_everything(42)
 
     # Define Hyperparameters
-    params = {
-        'exp_name': EXP_NAME,
-        'input_dim': INPUT_DIM,
-        'output_dim': OUTPUT_DIM,
-        'label_col': LABEL_COL,
-        'n_layers': trial.suggest_int('n_layers', 3, 5),
-        'hidden_dim': trial.suggest_categorical('hidden_dim', [512, 1024]),
-        'n_heads': trial.suggest_categorical('n_heads', [3, 4, 6]),
-        'lr': trial.suggest_float('lr', 1e-5, 1e-3, log=True),
-        'weight_decay': trial.suggest_float('weight_decay', 1e-6, 1e-3, log=True),
-        'batch_size': trial.suggest_categorical('batch_size', [8, 16]),
-        'loss_beta': 0, # trial.suggest_float('loss_beta', 0.05, 1.0, log=True),
-        'cpls_alpha': 0, # No CPLS trial.suggest_float('cpls_alpha', 0.01, 0.15, log=True),
-        'matrix_name': trial.suggest_categorical('matrix_name', ["asymmetric_risk",
-                                                                "squared_distance"]),
-        'aug_p': trial.suggest_categorical('aug_p', [0.1, 0.15, 0.20, 0.25, 0.3]),
-        # 'p_dropout': trial.suggest_float('p_dropout', 0.01, 0.25, log=True),
-    }
+    params = {'exp_name': EXP_NAME, 'input_dim': INPUT_DIM, 'output_dim': OUTPUT_DIM, 'label_col': LABEL_COL,
+              "encoder_type": "transmil",
+              # 'n_layers': trial.suggest_int('n_layers', 3, 5),
+              # 'hidden_dim': trial.suggest_categorical('hidden_dim', [512, 1024]),
+              # 'n_heads': trial.suggest_categorical('n_heads', [3, 4, 6]),
+              'lr': trial.suggest_float('lr', 1e-5, 1e-3, log=True),
+              'weight_decay': trial.suggest_float('weight_decay', 1e-6, 1e-3, log=True),
+              'batch_size': trial.suggest_categorical('batch_size', [8, 16]),
+              'loss_beta': trial.suggest_float('loss_beta', 0.05, 1.0, log=True),
+              'cpls_alpha': trial.suggest_float('cpls_alpha', 0.01, 0.25, log=True),
+              'matrix_name': "asymmetric_risk",  #  trial.suggest_categorical('matrix_name', ["asymmetric_risk", "squared_distance"]),
+              'aug_p': trial.suggest_categorical('aug_p', [0.1, 0.15, 0.20, 0.25, 0.3]), 'moe_args': None}
 
     # moe_args = {
     #     "input_dim": INPUT_DIM,
@@ -66,9 +60,6 @@ def objective(trial):
     #     "auto_rank": True,  # automatically calculate the appropriate low rank for parameter efficiency
     # }
     #
-    params['moe_args'] = None
-
-
 
     train_dataset = H5Dataset(
         csv_path=CSV_PATH_TRAIN,
@@ -116,9 +107,9 @@ if __name__ == "__main__":
     EXP_NAME = input("Enter experiment name: ")
 
     study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=10)
+    study.optimize(objective, n_trials=15)
 
-    optuna_df_path = f"./optuna_results/Architectural_Baselines/optuna_trials_{EXP_NAME}.csv"
+    optuna_df_path = f"./optuna_results/Architectural_Baselines/optuna_{EXP_NAME}.csv"
     optuna_df = study.trials_dataframe()
     # remove the characters: user_attrs from the column names containing the user_attrs
     optuna_df.columns = [col.replace('user_attrs', '') for col in optuna_df.columns]

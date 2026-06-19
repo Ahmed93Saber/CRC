@@ -48,7 +48,6 @@ def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, 
 
     for epoch in range(epochs):
         # Create an empty confusion matrix to track this epoch's mistakes
-        epoch_cm = torch.zeros((num_classes, num_classes))
         _ = train_one_epoch(
             model,
             train_loader,
@@ -56,11 +55,9 @@ def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, 
             optimizer,
             device,
             current_smoothing_matrix=current_smoothing_matrix,
-            epoch_cm=epoch_cm
+            epoch_cm=None
         )
 
-        # Update the smoothing matrix for the NEXT epoch based on this epoch's mistakes
-        current_smoothing_matrix = compute_cpls_matrix(epoch_cm, num_classes, alpha=cpls_alpha)
         # Catch the dictionary instead of unpacking a tuple
         val_results = evaluate_model(model, val_loader, criterion, device)
 
