@@ -2,11 +2,12 @@ import torch
 import numpy as np
 from sklearn.metrics import roc_auc_score, precision_score, recall_score, accuracy_score, f1_score
 from src.utils import update_confusion_matrix
+import torch.nn.functional as F
 
 
-def train_one_epoch(model, train_loader, criterion, optimizer, device):
+def train_one_epoch(model, train_loader, criterion, optimizer, device, current_smoothing_matrix=None, epoch_cm=None):
     """
-    Performs one epoch of training using standard class-weighted cross entropy.
+    Performs one epoch of training, with support for dynamic CPLS targets.
     """
     model.train()
     running_loss = 0.0
@@ -14,18 +15,28 @@ def train_one_epoch(model, train_loader, criterion, optimizer, device):
     for features, labels, _ in train_loader:
         features, labels = features.to(device), labels.to(device)
 
+        # Determine if we are using dynamic soft targets for CPLS
+        if current_smoothing_matrix is not None:
+            soft_targets = current_smoothing_matrix.to(device)[labels]
+        else:
+            soft_targets = None
+
         optimizer.zero_grad()
         outputs = model(features)
-
         if isinstance(outputs, tuple):
             outputs = outputs[0]['logits']
 
-        # Standard loss calculation using the weighted CrossEntropyLoss
-        loss = criterion(outputs, labels)
+        # Pass both targets to the criterion (soft_targets will be None if not using CPLS)
+        loss = criterion(outputs, labels, soft_targets=soft_targets)
         loss.backward()
         optimizer.step()
 
         running_loss += loss.item() * features.size(0)
+
+        # # Track predictions for CPLS updates
+        # if epoch_cm is not None:
+        #     preds = torch.argmax(outputs, dim=1)
+        #     update_confusion_matrix(epoch_cm, labels.cpu(), preds.cpu())
 
     return running_loss / len(train_loader.dataset)
 
@@ -46,7 +57,7 @@ def evaluate_model(model, val_loader, criterion, device):
         for features, labels, file_ids in val_loader:
             # features, labels = {'features': features.to(device)}, labels.to(device)
             features, labels = features.to(device), labels.to(device)
-            outputs = model(features)
+            outputs = model(features)  # , labels, torch.nn.CrossEntropyLoss())
             if isinstance(outputs, tuple):
                 outputs = outputs[0]['logits']
 
@@ -100,5 +111,6 @@ def evaluate_model(model, val_loader, criterion, device):
         'auc': auc,
         'preds': all_preds,
         'labels': all_labels,
-        'ids': all_ids
+        'ids': all_ids,
+        'probs':all_probs
     }

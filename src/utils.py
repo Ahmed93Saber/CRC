@@ -207,3 +207,48 @@ def update_confusion_matrix(conf_matrix: torch.Tensor, targets: torch.Tensor, pr
         conf_matrix[t.long(), p.long()] += 1
 
 
+def create_cost_sensitive_smoothing_matrix(cost_matrix, alpha=0.1):
+    """
+    Converts a penalty cost matrix into a probability distribution for label smoothing.
+    Distributes the `alpha` mass inversely proportional to the cost.
+    """
+    # 1. Ensure it's a tensor and grab its device (CPU or CUDA)
+    if not isinstance(cost_matrix, torch.Tensor):
+        cost_matrix = torch.tensor(cost_matrix, dtype=torch.float32)
+
+    device = cost_matrix.device
+    num_classes = len(cost_matrix)
+
+    # Initialize the output matrix on the SAME device
+    smoothing_matrix = torch.zeros((num_classes, num_classes), device=device)
+
+    # Ensure alpha is a standard float to prevent device conflicts
+    alpha = float(alpha)
+
+    for i in range(num_classes):
+        costs = cost_matrix[i].clone().detach().to(torch.float32)
+
+        # 2. Create the mask on the SAME device
+        mask = torch.ones(num_classes, dtype=torch.bool, device=device)
+        mask[i] = False
+        incorrect_costs = costs[mask]
+
+        # 3. Calculate the inverse of the costs
+        inverses = 1.0 / (incorrect_costs + 1e-8)
+
+        # 4. Normalize the inverses so they sum to 1.0
+        normalized_weights = inverses / inverses.sum()
+
+        # 5. Multiply by alpha to get the final distributed penalty mass
+        alpha_distribution = normalized_weights * alpha
+
+        # 6. Construct the row on the SAME device
+        row = torch.zeros(num_classes, device=device)
+        row[mask] = alpha_distribution
+        row[i] = 1.0 - alpha
+
+        smoothing_matrix[i] = row
+
+    return smoothing_matrix
+
+

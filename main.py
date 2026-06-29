@@ -39,11 +39,11 @@ def objective(trial):
               # 'n_layers': trial.suggest_int('n_layers', 3, 5),
               # 'hidden_dim': trial.suggest_categorical('hidden_dim', [512, 1024]),
               # 'n_heads': trial.suggest_categorical('n_heads', [3, 4, 6]),
-              'lr': trial.suggest_float('lr', 1e-5, 1e-3, log=True),
+              'lr': trial.suggest_float('lr', 1e-5, 1e-4, log=True),
               'weight_decay': trial.suggest_float('weight_decay', 1e-6, 1e-3, log=True),
               'batch_size': trial.suggest_categorical('batch_size', [8, 16]),
               'loss_beta': 0, # trial.suggest_float('loss_beta', 0.05, 1.0, log=True),
-              'cpls_alpha': 0, # trial.suggest_float('cpls_alpha', 0.01, 0.25, log=True),
+              'cpls_alpha': trial.suggest_float('cpls_alpha', 0.05, 0.20, log=True),
               'matrix_name': "asymmetric_risk",  #  trial.suggest_categorical('matrix_name', ["asymmetric_risk", "squared_distance"]),
               'aug_p': trial.suggest_categorical('aug_p', [0.1, 0.15, 0.20, 0.25, 0.3]), 'moe_args': None}
 
@@ -107,7 +107,7 @@ if __name__ == "__main__":
     EXP_NAME = input("Enter experiment name: ")
 
     study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=15)
+    study.optimize(objective, n_trials=10)
 
     optuna_df_path = f"./optuna_results/Architectural_Baselines/optuna_{EXP_NAME}.csv"
     optuna_df = study.trials_dataframe()
