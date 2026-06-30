@@ -9,7 +9,7 @@ warnings.filterwarnings("ignore", category=UserWarning, message=".*non-tuple seq
 
 # --- Configuration ---
 CSV_PATH_TRAIN = './dataframes/combined_cohorts_CAL+BAY.csv'
-CSV_PATH_TEST = './dataframes/annotations_all_HunCRC_NEW.csv'
+CSV_PATH_TEST = 'dataframes/annotations_all_HunCRC.csv'
 H5_DIR_TRAIN = 'features/features_conch_v15_CAL'
 # H5_DIR_TRAIN = r"W:\pathologie\bioinfo-archive\TridentPipelineOutput\CRC\CaltagironeUNIV2\20x_256px_0px_overlap\features_uni_v2"
 H5_DIR_TEST = 'features/features_conch_v15_HUN'
@@ -42,7 +42,7 @@ def objective(trial):
               'lr': trial.suggest_float('lr', 1e-5, 1e-4, log=True),
               'weight_decay': trial.suggest_float('weight_decay', 1e-6, 1e-3, log=True),
               'batch_size': trial.suggest_categorical('batch_size', [8, 16]),
-              'loss_beta': 0, # trial.suggest_float('loss_beta', 0.05, 1.0, log=True),
+              'loss_beta': trial.suggest_float('loss_beta', 0.05, 0.2, log=True),
               'cpls_alpha': trial.suggest_float('cpls_alpha', 0.05, 0.20, log=True),
               'matrix_name': "asymmetric_risk",  #  trial.suggest_categorical('matrix_name', ["asymmetric_risk", "squared_distance"]),
               'aug_p': trial.suggest_categorical('aug_p', [0.1, 0.15, 0.20, 0.25, 0.3]), 'moe_args': None}
@@ -107,7 +107,7 @@ if __name__ == "__main__":
     EXP_NAME = input("Enter experiment name: ")
 
     study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=10)
+    study.optimize(objective, n_trials=12)
 
     optuna_df_path = f"./optuna_results/Architectural_Baselines/optuna_{EXP_NAME}.csv"
     optuna_df = study.trials_dataframe()
