@@ -8,11 +8,16 @@ COST_MATRICES = {
         [2.0, 10.0, 5.0, 0.0]
     ],
     # penalize false negatives much harder than false positives.
-    "asymmetric_risk": [
-        [0.0, 1.0, 3.0, 8.0],
-        [3.0, 0.0, 2.0, 6.0],
-        [8.0, 4.0, 0.0, 4.0],
-        [20.0, 15.0, 5.0, 0.0]
+    "asymmetric_risk_custom": [
+        # True: Low-Grade Dysplasia (0)
+        # Prev LGD, Pred HGD, Pred Adeno, Pred Other
+        [0.0,  2.0, 6.0,   3.0],
+        # True: High-Grade Dysplasia (1)
+        [4.0,  0.0, 4.0,   8.0],
+        # True: Adenocarcinoma (2)
+        [15.0, 5.0, 0.0,   20.0],
+        # True: Other (3)
+        [1.0,  3.0, 8.0,   0.0]
     ],
     # The penalty grows exponentially the further
     # the model's prediction is from the truth
