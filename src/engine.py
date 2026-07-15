@@ -1,8 +1,9 @@
 import torch
 import numpy as np
-from sklearn.metrics import roc_auc_score, precision_score, recall_score, accuracy_score, f1_score
+from sklearn.metrics import roc_auc_score, precision_score, recall_score, accuracy_score, f1_score, balanced_accuracy_score
 from src.utils import update_confusion_matrix
 import torch.nn.functional as F
+from millab.src.models.clam import CLAMModel
 
 
 def train_one_epoch(model, train_loader, criterion, optimizer, device, current_smoothing_matrix=None, epoch_cm=None):
@@ -22,7 +23,10 @@ def train_one_epoch(model, train_loader, criterion, optimizer, device, current_s
             soft_targets = None
 
         optimizer.zero_grad()
-        outputs = model(features)
+        if isinstance(model.base_model, CLAMModel):
+            outputs = model(features, labels, torch.nn.CrossEntropyLoss())
+        else:
+            outputs = model(features)
         if isinstance(outputs, tuple):
             outputs = outputs[0]['logits']
 
@@ -57,7 +61,10 @@ def evaluate_model(model, val_loader, criterion, device):
         for features, labels, file_ids in val_loader:
             # features, labels = {'features': features.to(device)}, labels.to(device)
             features, labels = features.to(device), labels.to(device)
-            outputs = model(features)  # , labels, torch.nn.CrossEntropyLoss())
+            if isinstance(model.base_model, CLAMModel):
+                outputs = model(features, labels, torch.nn.CrossEntropyLoss())
+            else:
+                outputs = model(features)
             if isinstance(outputs, tuple):
                 outputs = outputs[0]['logits']
 
@@ -80,7 +87,6 @@ def evaluate_model(model, val_loader, criterion, device):
     avg_loss = running_loss / len(val_loader.dataset)
 
     # Calculate basic metrics
-    # bal_acc, f1 = calculate_metrics(np.array(all_labels), np.array(all_preds))
     num_classes = np.array(all_probs).shape[1]
     avg_method = 'binary' if num_classes == 2 else 'weighted'
 

@@ -8,9 +8,10 @@ import numpy as np
 import os
 import shutil
 import optuna
+from sklearn.metrics import balanced_accuracy_score
 
 from millab.src.builder import create_model
-from src.utils import (EarlyStopping, CPLS_CombinedCostLoss, initialize_uniform_smoothing,
+from src.utils import (EarlyStopping, LSCombinedCostLoss, initialize_uniform_smoothing,
                        compute_cpls_matrix, update_confusion_matrix)
 from src.engine import train_one_epoch, evaluate_model
 from src.cost_matrices import get_cost_matrix
@@ -23,13 +24,7 @@ from src.models import ClassificationModel
 def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, model_dir, trial=None, epochs=50):
     """Handles the training, validation, and early stopping for a single fold."""
     model = create_model('abmil.base_mammoth.conch_v15', num_classes=4).to(device)
-    # model = ClassificationModel(
-    #     moe_args=params['moe_args'],
-    #     output_dim=params['output_dim'],
-    #     n_heads=params['n_heads'],
-    #     hidden_dim=params['hidden_dim'],
-    #     encoder_type=params['encoder_type'],
-    # ).to(device)
+
 
     optimizer = optim.AdamW(model.parameters(), lr=params['lr'], weight_decay=params['weight_decay'])
     # 0: Others, 1: Low-Grade, 2: High-Grade, 3: Adenocarcinoma
@@ -37,14 +32,14 @@ def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, 
     cost_matrix = get_cost_matrix(params['matrix_name'], device)
 
     # CE weight (alpha) = 1.0, Cost Matrix weight (beta) = 0.1
-    criterion = CPLS_CombinedCostLoss(cost_matrix, alpha=1.0, beta=params['loss_beta'])
+    criterion = LSCombinedCostLoss(cost_matrix, alpha=1.0, beta=params['loss_beta'])
     early_stopper = EarlyStopping(patience=8, delta=0.001)
 
     best_epoch_metrics = {'f1': 0, 'auc': 0, 'acc': 0, 'preds': [], 'truths': []}
 
-    cpls_alpha = params.get('cpls_alpha', 0.1)  # Default smoothing factor
+    ls_alpha = params.get('ls_alpha', 0.1)  # Default smoothing factor
     num_classes = 4
-    current_smoothing_matrix = initialize_uniform_smoothing(num_classes, alpha=cpls_alpha)
+    current_smoothing_matrix = initialize_uniform_smoothing(num_classes, alpha=ls_alpha)
 
     for epoch in range(epochs):
         # Create an empty confusion matrix to track this epoch's mistakes
@@ -107,14 +102,8 @@ def evaluate_test_set(test_dataset, params,  device, model_dir, n_splits):
 
     for k in range(n_splits):
         model_path = os.path.join(model_dir, f"fold_{k}.pt")
-        # model = create_model('abmil.base_mammoth.conch_v15', num_classes=4).to(device).to(device)
-        model = ClassificationModel(
-            moe_args=params['moe_args'],
-            output_dim=params['output_dim'],
-            n_heads=params['n_heads'],
-            hidden_dim=params['hidden_dim'],
-            encoder_type=params['encoder_type'],
-        ).to(device)
+        model = create_model('abmil.base_mammoth.conch_v15', num_classes=4).to(device).to(device)
+
         model.load_state_dict(torch.load(model_path))
 
         # Catch the dictionary
@@ -130,6 +119,8 @@ def evaluate_test_set(test_dataset, params,  device, model_dir, n_splits):
         test_data['ids'].append(test_results['ids'])
         test_data['probs'].append(test_results['probs'])
         test_data['cms'].append(confusion_matrix(test_results['labels'], test_results['preds']))
+        bal_acc = balanced_accuracy_score(np.array(test_results['labels']), np.array(test_results['preds']))
+        print(f"BAS: {bal_acc:.3f}")
 
     return test_data
 

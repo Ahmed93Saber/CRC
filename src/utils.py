@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 import random
 import os
-from sklearn.metrics import balanced_accuracy_score, f1_score
+from sklearn.metrics import balanced_accuracy_score, f1_score, cohen_kappa_score, accuracy_score
 
 
 def get_device():
@@ -122,9 +122,9 @@ def calculate_accuracies(predictions, ground_truths):
     return fold_accuracies
 
 
-class CPLS_CombinedCostLoss(nn.Module):
+class LSCombinedCostLoss(nn.Module):
     def __init__(self, cost_matrix, alpha=1.0, beta=0.1):
-        super(CPLS_CombinedCostLoss, self).__init__()
+        super(LSCombinedCostLoss, self).__init__()
         self.cost_matrix = cost_matrix
         self.alpha = alpha
         self.beta = beta
@@ -252,3 +252,28 @@ def create_cost_sensitive_smoothing_matrix(cost_matrix, alpha=0.1):
     return smoothing_matrix
 
 
+
+def get_folds_metrics(results_dict: dict):
+    b_accs = [balanced_accuracy_score(results_dict.get('truths')[i], results_dict.get('preds')[i]) for i in range(5)]
+    accs = [accuracy_score(results_dict.get('truths')[i], results_dict.get('preds')[i]) for i in range(5)]
+    qwk_scores = [
+        cohen_kappa_score(
+            results_dict.get('truths')[i],
+            results_dict.get('preds')[i],
+            weights='quadratic'
+        )
+        for i in range(5)
+    ]
+
+    aucs = results_dict.get('aucs', 0)
+    f1s = results_dict.get('f1s', 0)
+
+    results_summary = {
+    'AUCs': aucs,
+    'Balanced_Accuracies': b_accs,
+    'Accuracies': accs,
+    'F1s': f1s,
+    'QWKs': qwk_scores
+    }
+
+    return results_summary
