@@ -277,3 +277,17 @@ def get_folds_metrics(results_dict: dict):
     }
 
     return results_summary
+
+
+class CostAwareCrossEntropyLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.standard_ce = nn.CrossEntropyLoss()
+
+    def forward(self, logits, hard_targets, soft_targets=None):
+        if soft_targets is not None:
+            # Uses the cost-aware smoothing matrix during training
+            return F.cross_entropy(logits, soft_targets)
+        else:
+            # Fallback for validation/testing
+            return self.standard_ce(logits, hard_targets)
