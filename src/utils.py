@@ -122,6 +122,77 @@ def calculate_accuracies(predictions, ground_truths):
     return fold_accuracies
 
 
+class EMDCombinedLoss(nn.Module):
+    """
+    Cross-entropy + squared Earth Mover's Distance (Wasserstein) loss for the
+    ordinal colorectal adenoma-carcinoma sequence.
+
+    The EMD term replaces your hand-tuned cost matrix: each prediction is
+    penalized by how far its probability mass sits from the true grade ALONG
+    THE SEVERITY AXIS, so distant confusions cost more automatically.
+
+    CRITICAL: your dataloader labels are NOT in severity order:
+        0 = low-grade dysplasia
+        1 = high-grade dysplasia
+        2 = adenocarcinoma
+        3 = benign          <-- least severe, but highest index
+
+    Ascending severity:  benign < LGD < HGD < adenocarcinoma
+    i.e. original labels: 3     <  0  <  1  <  2
+
+    We reorder every prob/target vector by ORDINAL_ORDER before the CDF.
+    """
+
+    # original labels sorted by ASCENDING severity (position 0 = least severe)
+    ORDINAL_ORDER = [3, 0, 1, 2]   # benign, LGD, HGD, adenocarcinoma
+
+    def __init__(self, alpha=1.0, beta=1.0, under_grade_weight=1.0):
+        super().__init__()
+        self.alpha = alpha
+        self.beta = beta
+        # >1.0 penalizes UNDER-grading (predicting too benign) more than
+        # over-grading -- your old FN>FP intent, now scaled by ordinal distance.
+        # 1.0 = symmetric EMD.
+        self.under_grade_weight = under_grade_weight
+
+        self.standard_ce = nn.CrossEntropyLoss()
+        # buffer so it moves with .to(device)
+        self.register_buffer(
+            "ordinal_order", torch.tensor(self.ORDINAL_ORDER, dtype=torch.long)
+        )
+
+    def forward(self, logits, hard_targets, soft_targets=None):
+        num_classes = logits.size(1)
+
+        # 1. Cross-entropy (soft in training, hard in val) -- unchanged
+        if soft_targets is not None:
+            ce_loss = F.cross_entropy(logits, soft_targets)
+        else:
+            ce_loss = self.standard_ce(logits, hard_targets)
+
+        # 2. Squared EMD, computed in ordinal (severity-sorted) space
+        probs = F.softmax(logits, dim=1)
+        target_onehot = F.one_hot(hard_targets, num_classes).float()
+
+        # reorder columns so column index == severity position
+        probs_ord = probs.index_select(1, self.ordinal_order)
+        target_ord = target_onehot.index_select(1, self.ordinal_order)
+
+        # 1-D EMD = L2 distance between CDFs
+        cdf_pred = torch.cumsum(probs_ord, dim=1)
+        cdf_true = torch.cumsum(target_ord, dim=1)
+        cdf_diff = cdf_pred - cdf_true
+
+        # cdf_diff > 0  <=>  predicted mass sits BELOW truth == under-grading
+        weight = torch.ones_like(cdf_diff)
+        weight[cdf_diff > 0] = self.under_grade_weight
+
+        emd_loss = torch.sum(weight * cdf_diff.pow(2), dim=1).mean()
+
+        # 3. Combine
+        return (self.alpha * ce_loss) + (self.beta * emd_loss)
+
+
 class LSCombinedCostLoss(nn.Module):
     def __init__(self, cost_matrix, alpha=1.0, beta=0.1):
         super(LSCombinedCostLoss, self).__init__()

@@ -104,7 +104,7 @@ def evaluate_model(model, val_loader, criterion, device):
             all_labels,
             np.array(all_probs),
             multi_class='ovr',  # Use One-vs-Rest strategy
-            average='weighted'  # Handle class imbalance
+            average='macro'  # Handle class imbalance
         )
 
     # Return as a dictionary for scalability
