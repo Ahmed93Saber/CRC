@@ -145,14 +145,78 @@ def accuracy(y, P) -> float:
     return float((np.asarray(P).argmax(axis=1) == np.asarray(y)).mean())
 
 
+def _confusion(y, pred, K):
+    """K x K confusion matrix via a single bincount; far faster than sklearn in a
+    bootstrap loop. Rows = true class, cols = predicted class."""
+    return np.bincount(y * K + pred, minlength=K * K).reshape(K, K)
+
+
 def balanced_accuracy(y, P) -> float:
-    return float(balanced_accuracy_score(np.asarray(y), np.asarray(P).argmax(axis=1)))
+    y = np.asarray(y); K = np.asarray(P).shape[1]
+    C = _confusion(y, np.asarray(P).argmax(axis=1), K).astype(float)
+    per_class_recall = np.divide(np.diag(C), C.sum(axis=1),
+                                 out=np.zeros(K), where=C.sum(axis=1) > 0)
+    present = C.sum(axis=1) > 0
+    return float(per_class_recall[present].mean())
 
 
 def macro_f1(y, P) -> float:
-    P = np.asarray(P)
-    return float(f1_score(np.asarray(y), P.argmax(axis=1), average="macro",
-                          labels=np.arange(P.shape[1]), zero_division=0))
+    y = np.asarray(y); K = np.asarray(P).shape[1]
+    C = _confusion(y, np.asarray(P).argmax(axis=1), K).astype(float)
+    tp = np.diag(C)
+    fp = C.sum(axis=0) - tp
+    fn = C.sum(axis=1) - tp
+    denom = 2 * tp + fp + fn
+    f1 = np.divide(2 * tp, denom, out=np.zeros(K), where=denom > 0)
+    return float(f1.mean())
+
+
+def weighted_f1(y, P) -> float:
+    """Per-class F1 averaged with weights equal to each class's true-count (support).
+    This is sklearn's average='weighted'. Under class imbalance it tracks the common
+    classes and, unlike macro F1, is not dragged down by a rare class the model
+    handles poorly -- so report whichever matches the claim you want to make."""
+    y = np.asarray(y); K = np.asarray(P).shape[1]
+    C = _confusion(y, np.asarray(P).argmax(axis=1), K).astype(float)
+    tp = np.diag(C)
+    fp = C.sum(axis=0) - tp
+    fn = C.sum(axis=1) - tp
+    support = C.sum(axis=1)
+    denom = 2 * tp + fp + fn
+    f1 = np.divide(2 * tp, denom, out=np.zeros(K), where=denom > 0)
+    total = support.sum()
+    return float((f1 * support).sum() / total) if total > 0 else np.nan
+
+
+def weighted_f1(y, P) -> float:
+    """Per-class F1 averaged weighted by each class's support (true count). Matches
+    sklearn f1_score(average='weighted'). Prevalence-dominated, so majority classes
+    drive it -- report it next to macro F1, which weights every class equally."""
+    y = np.asarray(y); K = np.asarray(P).shape[1]
+    C = _confusion(y, np.asarray(P).argmax(axis=1), K).astype(float)
+    tp = np.diag(C)
+    fp = C.sum(axis=0) - tp
+    fn = C.sum(axis=1) - tp
+    support = C.sum(axis=1)
+    denom = 2 * tp + fp + fn
+    f1 = np.divide(2 * tp, denom, out=np.zeros(K), where=denom > 0)
+    total = support.sum()
+    return float((f1 * support).sum() / total) if total > 0 else np.nan
+
+
+def _weighted_kappa(y, P, power) -> float:
+    y = np.asarray(y); K = np.asarray(P).shape[1]
+    C = _confusion(y, np.asarray(P).argmax(axis=1), K).astype(float)
+    N = C.sum()
+    if N == 0:
+        return np.nan
+    idx = np.arange(K)
+    W = (np.abs(idx[:, None] - idx[None, :]) ** power).astype(float)
+    row = C.sum(axis=1); col = C.sum(axis=0)
+    E = np.outer(row, col) / N
+    num = (W * C).sum()
+    den = (W * E).sum()
+    return float(1 - num / den) if den > 0 else np.nan
 
 
 def quadratic_kappa(y, P) -> float:
@@ -160,16 +224,12 @@ def quadratic_kappa(y, P) -> float:
     between class indices, so it is only meaningful once the integer coding matches
     the clinical order -- see remap_to_ordinal() below. Applied to an arbitrary
     nominal coding it silently returns a wrong number rather than an error."""
-    P = np.asarray(P)
-    return float(cohen_kappa_score(np.asarray(y), P.argmax(axis=1),
-                                   weights="quadratic", labels=np.arange(P.shape[1])))
+    return _weighted_kappa(y, P, power=2)
 
 
 def linear_kappa(y, P) -> float:
     """Linearly-weighted kappa. Less harsh on distant errors than quadratic."""
-    P = np.asarray(P)
-    return float(cohen_kappa_score(np.asarray(y), P.argmax(axis=1),
-                                   weights="linear", labels=np.arange(P.shape[1])))
+    return _weighted_kappa(y, P, power=1)
 
 
 # ---------------------------------------------------------------------------
@@ -643,7 +703,7 @@ def compare(y, probs_a, probs_b, name_a="A", name_b="B", n_boot=5000,
                     output; the rest are then reportable as secondary without a
                     multiplicity correction. Leaving this None prints a warning,
                     because a table of p-values with no declared primary is a
-                    multiple-testing problem whether or not it is labelled one.
+                    multiple-testing problem whether it is labeled one.
     """
     y = np.asarray(y)
     labels = None
@@ -696,7 +756,7 @@ def compare(y, probs_a, probs_b, name_a="A", name_b="B", n_boot=5000,
                    ("Kendall tau-b", kendall_tau),
                    ("-Brier (multiclass)", neg_multiclass_brier),
                    ("accuracy (exact)", accuracy),
-                   ("macro F1", macro_f1),
+                   ("F1", weighted_f1),
                    ("macro AUROC (OvR)", macro_auroc_ovr)]
     else:
         metrics = [("macro AUROC (OvR)", macro_auroc_ovr),
@@ -704,7 +764,7 @@ def compare(y, probs_a, probs_b, name_a="A", name_b="B", n_boot=5000,
                    ("macro AUPRC", macro_auprc),
                    ("accuracy", accuracy),
                    ("balanced accuracy", balanced_accuracy),
-                   ("macro F1", macro_f1),
+                   ("F1", weighted_f1),
                    ("-Brier (multiclass)", neg_multiclass_brier)]
 
     if metric_set is not None:
@@ -815,7 +875,7 @@ if __name__ == "__main__":
     probs_B = make(1.5)
 
     PAPER_METRICS = ["macro AUROC (OvR)", "quadratic kappa",
-                     "accuracy (exact)", "macro F1"]
+                     "accuracy (exact)", "F1"]
 
     compare(y, probs_A, probs_B, name_a="MethodA", name_b="MethodB",
             n_boot=3000, ordinal_order=ORDINAL_ORDER,
