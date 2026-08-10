@@ -3,12 +3,11 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, Subset
 from sklearn.model_selection import StratifiedKFold
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, balanced_accuracy_score
 import numpy as np
 import os
 import shutil
 import optuna
-from sklearn.metrics import balanced_accuracy_score
 
 from millab.src.builder import create_model
 from src.utils import (EarlyStopping, LSCombinedCostLoss, initialize_uniform_smoothing,
@@ -20,24 +19,22 @@ from src.cost_matrices import get_cost_matrix
 
 def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, model_dir, trial=None, epochs=50):
     """Handles the training, validation, and early stopping for a single fold."""
-    model = create_model('abmil.base_mammoth.conch_v15', num_classes=params['output_dim']).to(device)
+    model = create_model('abmil.base_mammoth.conch_v15', lora_rank=6, auto_rank=False,
+                         num_classes=params['output_dim']).to(device)
 
 
     optimizer = optim.AdamW(model.parameters(), lr=params['lr'], weight_decay=params['weight_decay'])
-
-    # cost_matrix = get_cost_matrix(params['matrix_name'], device)
-    # criterion = LSCombinedCostLoss(cost_matrix, alpha=1.0, beta=params['loss_beta']) # Dual loss objective
-
-    criterion = EMDCombinedLoss(alpha=1.0, beta=params['loss_beta']).to(device)
+    cost_matrix = get_cost_matrix(params['matrix_name'], device)
+    criterion = LSCombinedCostLoss(cost_matrix, alpha=1.0, beta=params['loss_beta']) # Dual loss objective
 
     early_stopper = EarlyStopping(patience=7, delta=0.001)
 
     best_epoch_metrics = {'f1': 0, 'auc': 0, 'acc': 0, 'preds': [], 'truths': []}
 
-    ls_alpha = params.get('ls_alpha', 0.1)  # Default smoothing factor
+    ls_gamma = params.get('ls_gamma', 0.1)  # Default smoothing factor
     num_classes = params['output_dim']
 
-    current_smoothing_matrix = initialize_uniform_smoothing(num_classes, alpha=ls_alpha)
+    current_smoothing_matrix = initialize_uniform_smoothing(num_classes, gamma=ls_gamma)
 
     for epoch in range(epochs):
         # Create an empty confusion matrix to track this epoch's mistakes
@@ -87,7 +84,7 @@ def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, 
     return best_epoch_metrics
 
 
-def evaluate_test_set(test_dataset, params,  device, model_dir, n_splits):
+def evaluate_test_set(test_dataset, params,  device, model_dir, n_splits=5):
     """Loads saved fold models and runs inference across the test dataset."""
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
     criterion = nn.CrossEntropyLoss()
@@ -100,7 +97,8 @@ def evaluate_test_set(test_dataset, params,  device, model_dir, n_splits):
 
     for k in range(n_splits):
         model_path = os.path.join(model_dir, f"fold_{k}.pt")
-        model = create_model('abmil.base_mammoth.conch_v15', num_classes=params['output_dim']).to(device).to(device)
+        model = create_model('abmil.base_mammoth.conch_v15', lora_rank=6,  auto_rank=False,
+                             num_classes=params['output_dim']).to(device).to(device)
         model.load_state_dict(torch.load(model_path))
 
         # Catch the dictionary

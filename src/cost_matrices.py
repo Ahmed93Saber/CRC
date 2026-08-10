@@ -16,11 +16,11 @@ COST_MATRICES = {
         [2.0, 4.0, 8.0, 0.0]
     ],
     "asymmetric_risk_custom2": [
-        # Prev LGD, Pred HGD, Pred Adeno, Pred Other
-        [0.0, 2.0, 3.0, 5.0],
-        [5.0, 0.0, 2.0, 10.0],
-        [8.0, 4.0, 0.0, 20.0],
-        [2.0, 5.0, 10.0, 0.0]
+
+        [0.0, 2.0, 4.0], # other
+        [6.0, 0.0, 2.0], # Adenoma
+        [16.0, 8.0, 0.0], # Adenocarcinoma
+
     ],
     # The penalty grows exponentially the further
     # the model's prediction is from the truth

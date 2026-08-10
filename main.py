@@ -11,7 +11,7 @@ warnings.filterwarnings("ignore", category=UserWarning, message=".*non-tuple seq
 
 # --- Configuration ---
 CSV_PATH_TRAIN = './dataframes/combined_cohorts_CAL+BAY.csv'
-CSV_PATH_TEST = './dataframes/annotations_all_HunCRC_NEW.csv'
+CSV_PATH_TEST = 'dataframes/annotations_all_HunCRC.csv'
 H5_DIR_TRAIN = 'features/features_conch_v15_CAL'
 # H5_DIR_TRAIN = r"W:\pathologie\bioinfo-archive\TridentPipelineOutput\CRC\CaltagironeUNIV2\20x_256px_0px_overlap\features_uni_v2"
 H5_DIR_TEST = 'features/features_conch_v15_HUN'
@@ -35,7 +35,7 @@ def objective(trial):
               'weight_decay': trial.suggest_float('weight_decay', 1e-6, 1e-3, log=True),
               'batch_size': trial.suggest_categorical('batch_size', [4, 8, 16]),
               'loss_beta': trial.suggest_categorical('loss_beta', [0.3, 0.5, 1.0, 2.0]),
-              'ls_alpha': trial.suggest_float('ls_alpha', 0.05, 0.20),
+              'ls_gamma': trial.suggest_float('ls_gamma', 0.05, 0.20),
               # 'matrix_name': "asymmetric_risk_custom2",  #  trial.suggest_categorical('matrix_name', ["asymmetric_risk", "squared_distance"]),
               'aug_p': trial.suggest_categorical('aug_p', [0.1, 0.15, 0.20, 0.25, 0.3]), 'moe_args': None}
 
