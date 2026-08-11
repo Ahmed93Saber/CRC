@@ -34,7 +34,9 @@ def objective(trial):
               'lr': trial.suggest_float('lr', 1e-5, 1e-3, log=True),
               'weight_decay': trial.suggest_float('weight_decay', 1e-6, 1e-3, log=True),
               'batch_size': trial.suggest_categorical('batch_size', [4, 8, 16]),
-              'loss_beta': trial.suggest_categorical('loss_beta', [0.3, 0.5, 1.0, 2.0]),
+              'loss_beta': trial.suggest_categorical('loss_beta', [0.1, 0.2, 0.3, 0.5, 0.7, 1.0, 2.0]),
+              'loss_alpha': trial.suggest_categorical('loss_alpha', [0.1, 0.2, 0.3, 0.5, 0.7, 1.0, 2.0]),
+              'under_grade_weight': trial.suggest_categorical('under_grade_weight', [1.0, 2.0, 3.0]),
               'ls_gamma': trial.suggest_float('ls_gamma', 0.05, 0.20),
               # 'matrix_name': "asymmetric_risk_custom2",  #  trial.suggest_categorical('matrix_name', ["asymmetric_risk", "squared_distance"]),
               'aug_p': trial.suggest_categorical('aug_p', [0.1, 0.15, 0.20, 0.25, 0.3]), 'moe_args': None}
@@ -98,13 +100,8 @@ if __name__ == "__main__":
     # Direction is MAXIMIZE because we are returning F1 Score
     EXP_NAME = input("Enter experiment name: ")
 
-    study = optuna.create_study(direction="maximize",
-                                pruner=optuna.pruners.MedianPruner(
-                                    n_startup_trials=5,  # Number of full trials to wait before pruning begins
-                                    n_warmup_steps=10  # Number of steps (epochs) to wait *inside* a single trial
-                                )
-                                )
-    study.optimize(objective, n_trials=6)
+    study = optuna.create_study(direction="maximize")
+    study.optimize(objective, n_trials=20)
 
     optuna_df_path = f"./optuna_results/emd/{EXP_NAME}.csv"
     optuna_df = study.trials_dataframe()

@@ -24,8 +24,11 @@ def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, 
 
 
     optimizer = optim.AdamW(model.parameters(), lr=params['lr'], weight_decay=params['weight_decay'])
-    cost_matrix = get_cost_matrix(params['matrix_name'], device)
-    criterion = LSCombinedCostLoss(cost_matrix, alpha=1.0, beta=params['loss_beta']) # Dual loss objective
+    # cost_matrix = get_cost_matrix(params['matrix_name'], device)
+
+    criterion = EMDCombinedLoss(alpha=params['loss_alpha'],
+                                beta=params['loss_beta'],
+                                under_grade_weight=params['under_grade_weight']).to(device)
 
     early_stopper = EarlyStopping(patience=7, delta=0.001)
 
@@ -45,7 +48,6 @@ def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, 
             optimizer,
             device,
             current_smoothing_matrix=current_smoothing_matrix,
-            epoch_cm=None
         )
 
 
@@ -70,11 +72,11 @@ def train_and_validate_fold(fold_idx, train_loader, val_loader, params, device, 
             torch.save(model.state_dict(), os.path.join(model_dir, ckpt_name))
 
         # Optuna Pruning
-        if trial is not None:
-            trial.report(val_results['acc'], epoch + (fold_idx * epochs))
-            if trial.should_prune():
-                print(f"  [INFO] Trial pruned by Optuna at fold {fold_idx + 1}, epoch {epoch + 1}")
-                raise optuna.TrialPruned()
+        # if trial is not None:
+        #     trial.report(val_results['acc'], epoch + (fold_idx * epochs))
+        #     if trial.should_prune():
+        #         print(f"  [INFO] Trial pruned by Optuna at fold {fold_idx + 1}, epoch {epoch + 1}")
+        #         raise optuna.TrialPruned()
 
         early_stopper(val_results['acc'])
         if early_stopper.early_stop:

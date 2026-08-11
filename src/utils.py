@@ -223,19 +223,19 @@ class LSCombinedCostLoss(nn.Module):
 
 
 
-def initialize_uniform_smoothing(num_classes: int, alpha: float = 0.1) -> torch.Tensor:
+def initialize_uniform_smoothing(num_classes: int, gamma: float = 0.1) -> torch.Tensor:
     """
     Creates a standard label smoothing matrix.
     Returns a [num_classes, num_classes] tensor where row i is the soft target for true class i.
     """
     # Calculate the uniform penalty mass for incorrect classes
-    smooth_val = alpha / (num_classes - 1)
+    smooth_val = gamma / (num_classes - 1)
 
     # Initialize a matrix filled with the smoothing value
     smoothing_matrix = torch.full((num_classes, num_classes), smooth_val)
 
     # Override the diagonal (the true classes) with the primary confidence mass
-    smoothing_matrix.fill_diagonal_(1.0 - alpha)
+    smoothing_matrix.fill_diagonal_(1.0 - gamma)
 
     return smoothing_matrix
 
@@ -362,3 +362,37 @@ class CostAwareCrossEntropyLoss(nn.Module):
         else:
             # Fallback for validation/testing
             return self.standard_ce(logits, hard_targets)
+
+
+class UnimodalSoftLabeler(nn.Module):
+    """
+    Generates unimodal soft targets for the ordinal CRC sequence, replacing
+    uniform label smoothing. Mass leaks from the true grade to its ORDINAL
+    neighbours (by severity), decaying with distance -- so a benign label
+    leaks toward LGD, never toward adenocarcinoma.
+
+    SORD (Diaz & Marathe, CVPR 2019):
+        soft(t)_j = softmax_j( -|rank_t - rank_j|^p / T )
+
+    Dataloader labels are NOT in severity order:
+        0=LGD, 1=HGD, 2=adenocarcinoma, 3=benign
+    Ascending severity: benign(3) < LGD(0) < HGD(1) < adeno(2)
+    """
+
+    ORDINAL_ORDER = [3, 0, 1, 2]  # dataloader labels, ascending severity
+
+    def __init__(self, num_classes=4, distance_power=2.0, temperature=1.0):
+        super().__init__()
+        order = torch.tensor(self.ORDINAL_ORDER, dtype=torch.long)
+        ranks = torch.argsort(order).float()          # rank[label] -> [1,2,3,0]
+
+        # dist[t, j] = |rank_t - rank_j| on the severity axis
+        dist = (ranks.unsqueeze(1) - ranks.unsqueeze(0)).abs()
+        table = F.softmax(-(dist ** distance_power) / temperature, dim=1)
+
+        # row t = soft label for true class t, indexed in DATALOADER order
+        self.register_buffer("table", table)
+
+    def forward(self, hard_targets):
+        table = self.table.to(hard_targets.device)    # device safety net
+        return table[hard_targets]
