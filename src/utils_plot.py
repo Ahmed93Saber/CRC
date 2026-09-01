@@ -50,20 +50,7 @@ def _stars(p):
 def panel_figure(results, metrics, models, baseline=None, sig=None,
                  ncols=2, figsize=None, title="Comparison of metrics across models",
                  point_color="#c0392b", ci_color="#7fa8c9",
-                 shared_ylim=None, savepath=None):
-    """One panel per metric. Ensemble point + 95% CI per model, fold dots overlaid.
-
-    results     : nested dict, results[model][metric] -> {point, lo, hi, folds}
-    metrics     : ordered list of metric names (panel order)
-    models      : ordered list of model names (x order; put your method first)
-    baseline    : model name used as the reference for significance stars
-    sig         : optional sig[model][metric] -> p-value (paired test vs baseline)
-    shared_ylim : optional list of metric names that should share one common y-range
-                  (computed from their CIs + fold dots). Right-column panels among
-                  them also get their y tick labels removed, since the left panel in
-                  the same row already carries the scale. Metrics not listed keep
-                  their own auto y-range (e.g. AUC).
-    """
+                 shared_ylim=None, row_shared_ylim=False, savepath=None):
     dot_color = "#34495e"
     n = len(metrics)
     nrows = int(np.ceil(n / ncols))
@@ -72,12 +59,9 @@ def panel_figure(results, metrics, models, baseline=None, sig=None,
     fig, axes = plt.subplots(nrows, ncols, figsize=figsize)
     axes = np.atleast_1d(axes).ravel()
 
-    # common y-range for the shared metrics
-    shared_ylim = list(shared_ylim) if shared_ylim else []
-    ylim_shared = None
-    if shared_ylim:
+    def _range_for(metric_list):
         vals = []
-        for metric in shared_ylim:
+        for metric in metric_list:
             for model in models:
                 r = results[model][metric]
                 vals += [r["lo"], r["hi"]]
@@ -85,42 +69,51 @@ def panel_figure(results, metrics, models, baseline=None, sig=None,
                 if f is not None and len(f):
                     vals += list(np.asarray(f))
         lo, hi = min(vals), max(vals)
-        rng = hi - lo
-        ylim_shared = (lo - rng * 0.06, hi + rng * 0.16)   # extra top for stars
+        rng = hi - lo or 1.0
+        return (lo - rng * 0.08, hi + rng * 0.16)   # bottom pad + star headroom
+
+    # y-limit strategy, in priority order:
+    #   row_shared_ylim : each ROW shares one range (group similar metrics per row)
+    #   shared_ylim=True: every panel shares one range
+    #   shared_ylim=list: the named metrics share one range
+    #   else            : per-panel autoscale
+    if shared_ylim is True:
+        shared_metrics = list(metrics)
+    elif shared_ylim:
+        shared_metrics = list(shared_ylim)
+    else:
+        shared_metrics = []
+    ylim_shared = _range_for(shared_metrics) if shared_metrics else None
+
+    row_ylim = {}
+    if row_shared_ylim:
+        for row in range(nrows):
+            row_metrics = metrics[row * ncols:(row + 1) * ncols]
+            if row_metrics:
+                row_ylim[row] = _range_for(row_metrics)
 
     x = np.arange(len(models))
     for ai, metric in enumerate(metrics):
         ax = axes[ai]
         for xi, model in zip(x, models):
             r = results[model][metric]
-
-            # faint individual fold scores (training stability)
             folds = r.get("folds")
             if folds is not None and len(folds):
                 jit = (np.random.default_rng(xi).random(len(folds)) - 0.5) * 0.16
                 ax.scatter(np.full(len(folds), xi) + jit, folds, s=22,
-                           color=dot_color, alpha=0.55, zorder=2,
-                           edgecolors="none")
-
-            # 95% CI (patient bootstrap on the ensemble)
+                           color=dot_color, alpha=0.55, zorder=2, edgecolors="none")
             lo, hi, pt = r["lo"], r["hi"], r["point"]
             ax.plot([xi, xi], [lo, hi], color=ci_color, lw=2.2, zorder=3,
                     solid_capstyle="round")
             ax.plot([xi - 0.08, xi + 0.08], [lo, lo], color=ci_color, lw=2.2, zorder=3)
             ax.plot([xi - 0.08, xi + 0.08], [hi, hi], color=ci_color, lw=2.2, zorder=3)
-
-            # ensemble point estimate
-            ax.scatter([xi], [pt], marker="_", s=95, color=point_color,
-                       zorder=5, edgecolors="white", linewidths=0.8)
-
-            # significance star vs baseline
+            ax.scatter([xi], [pt], marker="_", s=95, color=point_color, zorder=5)
             if sig is not None and baseline is not None and model != baseline:
                 p = sig.get(model, {}).get(metric)
                 s = _stars(p)
                 if s:
                     ax.annotate(s, (xi, hi), textcoords="offset points",
-                                xytext=(0, 5), ha="center", fontsize=9,
-                                color="#2c3e50")
+                                xytext=(0, 5), ha="center", fontsize=9, color="#2c3e50")
 
         ax.set_title(metric, fontsize=12)
         ax.set_xticks(x)
@@ -130,23 +123,18 @@ def panel_figure(results, metrics, models, baseline=None, sig=None,
         for sp in ("top", "right"):
             ax.spines[sp].set_visible(False)
 
-        # apply shared y-range and strip right-column y labels
-        if metric in shared_ylim and ylim_shared is not None:
+        # y-limits: row-shared > shared_metrics > per-panel autoscale
+        row = ai // ncols
+        if row_shared_ylim and row in row_ylim:
+            ax.set_ylim(*row_ylim[row])
+            if ai % ncols != 0:
+                ax.tick_params(axis="y", labelleft=False)
+        elif metric in shared_metrics and ylim_shared is not None:
             ax.set_ylim(*ylim_shared)
-            if ai % ncols != 0:                      # right column
+            if ai % ncols != 0:
                 ax.tick_params(axis="y", labelleft=False)
         else:
-            # per-panel range with headroom so the upper cap + star can't clip
-            vals = []
-            for model in models:
-                r = results[model][metric]
-                vals += [r["lo"], r["hi"]]
-                f = r.get("folds")
-                if f is not None and len(f):
-                    vals += list(np.asarray(f))
-            lo_v, hi_v = min(vals), max(vals)
-            rng_v = hi_v - lo_v or 1.0
-            ax.set_ylim(lo_v - rng_v * 0.08, hi_v + rng_v * 0.16)
+            ax.set_ylim(*_range_for([metric]))
 
     for j in range(n, len(axes)):
         axes[j].axis("off")
@@ -159,16 +147,14 @@ def panel_figure(results, metrics, models, baseline=None, sig=None,
                markersize=7, label="Individual fold scores", alpha=0.7),
     ]
     if n < len(axes):
-        # use the empty bottom-right slot: unambiguous corner, no data overlap
         lax = axes[n]
         lax.axis("off")
         lax.legend(handles=handles, loc="center", frameon=False, fontsize=10)
+        fig.tight_layout(rect=[0, 0, 1, 0.98])
     else:
-        axes[-1].legend(handles=handles, loc="lower right",
-                        bbox_to_anchor=(1.0, 0.0), frameon=False, fontsize=9)
-
-    fig.suptitle(title, fontsize=15, y=0.995)
-    fig.tight_layout(rect=[0, 0, 1, 0.98])
+        fig.tight_layout(rect=[0, 0.06, 1, 0.98])
+        fig.legend(handles=handles, loc="lower center", ncol=3,
+                   frameon=False, fontsize=10, bbox_to_anchor=(0.5, 0.0))
     if savepath:
         fig.savefig(savepath, dpi=170, bbox_inches="tight")
     return fig
@@ -370,7 +356,9 @@ def default_metrics():
             "Balanced Accuracy": mpc.balanced_accuracy,
             "F1": mpc.weighted_f1,
             "QWK": mpc.quadratic_kappa,
-            "AUC": mpc.macro_auroc_ovr}
+            "AUC": mpc.macro_auroc_ovr,
+            "Recall": mpc.macro_recall,
+            "Precision": mpc.macro_precision,}
 
 
 def figures_from_predictions(y, probs_by_model, baseline,
@@ -445,6 +433,176 @@ def figures_from_predictions(y, probs_by_model, baseline,
 
     return {"results": results, "diffs": diffs, "sig": sig,
             "fig_panel": fig_panel, "fig_forest": fig_forest}
+
+
+def _bin_edges(scores, n_bins, strategy):
+    if strategy == "uniform":
+        return np.linspace(0.0, 1.0, n_bins + 1)
+    if strategy == "quantile":
+        q = np.linspace(0.0, 1.0, n_bins + 1)
+        edges = np.unique(np.quantile(scores, q))
+        edges[0], edges[-1] = 0.0, 1.0 + 1e-9  # cover the ends
+        return edges
+    raise ValueError("strategy must be 'uniform' or 'quantile'")
+
+
+def _binned(scores, correct, n_bins, strategy):
+    """Return per-bin (mean_score, mean_correct, count) dropping empty bins."""
+    edges = _bin_edges(scores, n_bins, strategy)
+    idx = np.clip(np.digitize(scores, edges[1:-1], right=False), 0, len(edges) - 2)
+    conf, acc, cnt = [], [], []
+    for b in range(len(edges) - 1):
+        m = idx == b
+        c = int(m.sum())
+        if c:
+            conf.append(scores[m].mean())
+            acc.append(correct[m].mean())
+            cnt.append(c)
+    return np.array(conf), np.array(acc), np.array(cnt)
+
+
+# ---------------------------------------------------------------------------
+# ECE metrics  (lower is better)
+# ---------------------------------------------------------------------------
+
+def confidence_ece(y, P, n_bins=10, strategy="quantile") -> float:
+    """Top-label expected calibration error. Lower is better; 0 is perfect."""
+    y = np.asarray(y);
+    P = np.asarray(P, float)
+    conf = P.max(axis=1)
+    correct = (P.argmax(axis=1) == y).astype(float)
+    c, a, n = _binned(conf, correct, n_bins, strategy)
+    return float(np.sum(n / n.sum() * np.abs(a - c))) if len(n) else np.nan
+
+
+def confidence_mce(y, P, n_bins=10, strategy="quantile") -> float:
+    """Maximum calibration error: the worst single bin's gap. Lower is better."""
+    y = np.asarray(y);
+    P = np.asarray(P, float)
+    conf = P.max(axis=1)
+    correct = (P.argmax(axis=1) == y).astype(float)
+    c, a, n = _binned(conf, correct, n_bins, strategy)
+    return float(np.max(np.abs(a - c))) if len(n) else np.nan
+
+
+def classwise_ece(y, P, n_bins=10, strategy="quantile", weighted=False) -> float:
+    """Mean over classes of one-vs-rest calibration error. Lower is better.
+    weighted=True weights classes by prevalence instead of equally."""
+    y = np.asarray(y);
+    P = np.asarray(P, float)
+    K = P.shape[1]
+    eces, support = [], []
+    for k in range(K):
+        pk = P[:, k]
+        yk = (y == k).astype(float)
+        c, a, n = _binned(pk, yk, n_bins, strategy)
+        if len(n):
+            eces.append(np.sum(n / n.sum() * np.abs(a - c)))
+            support.append((y == k).sum())
+    if not eces:
+        return np.nan
+    eces = np.array(eces);
+    support = np.array(support, float)
+    if weighted and support.sum() > 0:
+        return float(np.average(eces, weights=support))
+    return float(eces.mean())
+
+
+def neg_confidence_ece(y, P, **kw) -> float:
+    """Higher-is-better wrapper, for feeding the paired-comparison framework
+    (which treats larger differences as favouring the first model). A positive
+    difference then means the first model is BETTER calibrated (lower ECE)."""
+    return -confidence_ece(y, P, **kw)
+
+
+# ---------------------------------------------------------------------------
+# Reliability curve data + bootstrap CI on ECE
+# ---------------------------------------------------------------------------
+
+def reliability_curve(y, P, n_bins=10, strategy="quantile"):
+    """Per-bin data for a top-label reliability curve.
+    Returns dict: mean_conf, mean_acc, count, ece."""
+    y = np.asarray(y);
+    P = np.asarray(P, float)
+    conf = P.max(axis=1)
+    correct = (P.argmax(axis=1) == y).astype(float)
+    c, a, n = _binned(conf, correct, n_bins, strategy)
+    ece = float(np.sum(n / n.sum() * np.abs(a - c))) if len(n) else np.nan
+    return {"mean_conf": c, "mean_acc": a, "count": n, "ece": ece}
+
+
+def ece_ci(y, P, metric=confidence_ece, n_boot=10000, seed=0, alpha=0.05, **kw):
+    """Patient-bootstrap 95% CI for an ECE metric, stratified by class (matches the
+    rest of the pipeline). Returns (point, lo, hi)."""
+    y = np.asarray(y);
+    P = np.asarray(P, float)
+    rng = np.random.default_rng(seed)
+    blocks = [np.flatnonzero(y == k) for k in np.unique(y)]
+    vals = np.empty(n_boot)
+    for i in range(n_boot):
+        idx = np.concatenate([b[rng.integers(0, len(b), len(b))] for b in blocks])
+        vals[i] = metric(y[idx], P[idx], **kw)
+    lo, hi = np.percentile(vals, [100 * alpha / 2, 100 * (1 - alpha / 2)])
+    return float(metric(y, P, **kw)), float(lo), float(hi)
+
+
+# ---------------------------------------------------------------------------
+# Plot
+# ---------------------------------------------------------------------------
+
+def reliability_diagram(y, probs_by_model, ensemble_method="mean",
+                        n_bins=10, strategy="quantile", title="Reliability",
+                        colors=None, savepath=None):
+    """Overlay reliability curves for several models, with a confidence histogram.
+
+    probs_by_model : {model_name: (n_folds, n, K) OR (n, K)}. 3-D arrays are
+                     ensembled (mean prob across folds) first.
+    Returns the matplotlib figure. ECE (top-label) is shown per model in the legend.
+    """
+    import src.utils_stats as mpc
+
+    y = np.asarray(y)
+    if colors is None:
+        colors = ["#c0392b", "#2980b9", "#27ae60", "#8e44ad", "#e67e22", "#16a085"]
+
+    fig, (ax, axh) = plt.subplots(
+        2, 1, figsize=(5.4, 6.2), sharex=True,
+        gridspec_kw={"height_ratios": [3, 1], "hspace": 0.08},
+        constrained_layout=True)
+
+    ax.plot([0, 1], [0, 1], ls="--", color="#888", lw=1, label="Perfect calibration")
+
+    for i, (name, probs) in enumerate(probs_by_model.items()):
+        probs = np.asarray(probs, float)
+        P = mpc.ensemble_folds(probs, ensemble_method) if probs.ndim == 3 else probs
+        rc = reliability_curve(y, P, n_bins=n_bins, strategy=strategy)
+        col = colors[i % len(colors)]
+        ax.plot(rc["mean_conf"], rc["mean_acc"], "-o", color=col, lw=1.8, ms=5,
+                label=f"{name} (ECE={rc['ece']:.3f})", zorder=3)
+        # confidence histogram (step outline so overlaps stay readable)
+        conf = P.max(axis=1)
+        axh.hist(conf, bins=np.linspace(conf.min(), 1.0, n_bins + 1),
+                 histtype="step", color=col, lw=1.5, alpha=0.8)
+
+    ax.set_ylabel("Observed accuracy")
+    ax.set_xlim(0, 1);
+    ax.set_ylim(0, 1)
+    ax.set_aspect("equal", adjustable="box")
+    ax.grid(ls="--", alpha=0.35)
+    ax.legend(loc="upper left", frameon=False, fontsize=8.5)
+    ax.set_title(title, fontsize=12)
+    for sp in ("top", "right"):
+        ax.spines[sp].set_visible(False)
+
+    axh.set_xlabel("Predicted confidence (max probability)")
+    axh.set_ylabel("Count")
+    axh.grid(axis="y", ls="--", alpha=0.35)
+    for sp in ("top", "right"):
+        axh.spines[sp].set_visible(False)
+
+    if savepath:
+        fig.savefig(savepath, dpi=170, bbox_inches="tight")
+    return fig
 
 
 # ---------------------------------------------------------------------------
